@@ -242,6 +242,7 @@ fn parse_path(input: &str) -> IResult<&str, Params, VerboseError<&str>> {
         "parse_path",
         map(
             tuple((
+                opt(char('/')),
                 context("parse_unsafe", opt(parse_unsafe)),
                 context("parse_meta", opt(parse_meta)),
                 context("parse_trim", opt(parse_trim)),
@@ -254,6 +255,7 @@ fn parse_path(input: &str) -> IResult<&str, Params, VerboseError<&str>> {
                 context("parse_image", opt(parse_image)),
             )),
             |(
+                _,
                 unsafe_,
                 meta,
                 trim_details,
