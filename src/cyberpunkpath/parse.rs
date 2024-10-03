@@ -10,7 +10,7 @@ use nom::{
     bytes::complete::{tag, take_while1},
     character::complete::{alphanumeric1, char, digit1},
     combinator::{map, opt, recognize, success, value},
-    error::{context, ErrorKind, ParseError, VerboseError, VerboseErrorKind},
+    error::{context, ErrorKind, VerboseError, VerboseErrorKind},
     multi::{many1, separated_list0},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
     IResult,
@@ -246,10 +246,10 @@ fn parse_path(input: &str) -> IResult<&str, Params, VerboseError<&str>> {
                 context("parse_meta", opt(parse_meta)),
                 context("parse_trim", opt(parse_trim)),
                 context("parse_crop", opt(parse_crop)),
-                context("parse_fit_in", parse_fit_in),
-                context("parse_dimensions", parse_dimensions),
-                context("parse_alignment", parse_alignment),
-                context("parse_smart", parse_smart),
+                context("parse_fit_in", opt(parse_fit_in)),
+                context("parse_dimensions", opt(parse_dimensions)),
+                context("parse_alignment", opt(parse_alignment)),
+                context("parse_smart", opt(parse_smart)),
                 context("parse_filters", opt(parse_filters)),
                 context("parse_image", opt(parse_image)),
             )),
@@ -259,8 +259,8 @@ fn parse_path(input: &str) -> IResult<&str, Params, VerboseError<&str>> {
                 trim_details,
                 crop,
                 fit_in,
-                (width, height, h_flip, v_flip),
-                (h_align, v_align),
+                dimensions,
+                alignment,
                 smart,
                 filters,
                 image,
@@ -270,24 +270,29 @@ fn parse_path(input: &str) -> IResult<&str, Params, VerboseError<&str>> {
                     path: Some(input.to_string()),
                     image,
                     trim: trim_details.as_ref().map(|t| t.0).unwrap_or_default(),
-                    trim_by: trim_details
-                        .as_ref()
-                        .and_then(|t| t.1)
-                        .unwrap_or(TrimBy::TopLeft),
+                    trim_by: trim_details.as_ref().and_then(|t| t.1).unwrap_or_default(),
                     trim_tolerance: trim_details.as_ref().and_then(|t| t.2),
                     crop_left: crop.map(|(left, _, _, _)| left),
                     crop_top: crop.map(|(_, top, _, _)| top),
                     crop_right: crop.map(|(_, _, right, _)| right),
                     crop_bottom: crop.map(|(_, _, _, bottom)| bottom),
-                    width,
-                    height,
+                    width: dimensions.and_then(|(width, _, _, _)| width),
+                    height: dimensions.and_then(|(_, height, _, _)| height),
                     meta: meta.unwrap_or_default(),
-                    h_flip,
-                    v_flip,
-                    h_align,
-                    v_align,
-                    smart,
-                    fit_in,
+                    h_flip: dimensions
+                        .map(|(_, _, h_flip, _)| h_flip)
+                        .unwrap_or_default(),
+                    v_flip: dimensions
+                        .map(|(_, _, _, v_flip)| v_flip)
+                        .unwrap_or_default(),
+                    h_align: alignment
+                        .as_ref()
+                        .and_then(|(h_align, _)| h_align.to_owned()),
+                    v_align: alignment
+                        .as_ref()
+                        .and_then(|(_, v_align)| v_align.to_owned()),
+                    smart: smart.unwrap_or_default(),
+                    fit_in: fit_in.unwrap_or_default(),
                     filters: filters.unwrap_or_default(),
                     ..Default::default()
                 }
@@ -358,8 +363,8 @@ mod tests {
         let expected_params = Params {
             path: Some("unsafe/30x40:100x150/filters:fill(cyan)/raw.githubusercontent.com/cshum/imagor/master/testdata/dancing-banana.gif".to_string()),
             image: Some("raw.githubusercontent.com/cshum/imagor/master/testdata/dancing-banana.gif".to_string()),
-            trim: true,
-            trim_by: TrimBy::BottomRight,
+            trim: false,
+            trim_by: TrimBy::TopLeft,
             crop_left: Some(F32(30.0)),
             crop_top: Some(F32(40.0)),
             crop_right: Some(F32(100.0)),
