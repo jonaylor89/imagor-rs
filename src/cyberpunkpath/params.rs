@@ -34,7 +34,7 @@ impl FromStr for F32 {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq, Default)]
 pub enum TrimBy {
     #[serde(rename = "top-left")]
     #[default]
