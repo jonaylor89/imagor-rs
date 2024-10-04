@@ -36,8 +36,11 @@ async fn handler(params: Params) -> Result<Json<Params>, (StatusCode, String)> {
 
     // 2. check cache for image
     // 3. if image is not in cache, fetch image
+
     // 4. apply transforms
+
     // 5. save image to cache
+
     // 6. return image
 
     Ok(Json(params))

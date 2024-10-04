@@ -1,2 +1,2 @@
-pub mod cyberpunkpath;
+pub mod imagorpath;
 pub mod telemetry;

@@ -239,7 +239,7 @@ fn parse_image(input: &str) -> IResult<&str, String, VerboseError<&str>> {
 }
 
 #[tracing::instrument]
-fn parse_path(input: &str) -> IResult<&str, Params, VerboseError<&str>> {
+pub fn parse_path(input: &str) -> IResult<&str, Params, VerboseError<&str>> {
     context(
         "parse_path",
         map(
