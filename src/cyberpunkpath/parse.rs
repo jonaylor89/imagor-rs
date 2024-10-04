@@ -1,4 +1,6 @@
-use super::params::{Filter, Params, TrimBy, F32};
+use std::str::FromStr;
+
+use super::params::{Filter, HAlign, Params, TrimBy, VAlign, F32};
 use axum::{
     async_trait,
     extract::FromRequestParts,
@@ -139,21 +141,21 @@ fn parse_fit_in(input: &str) -> IResult<&str, bool, VerboseError<&str>> {
 
 fn parse_alignment(
     input: &str,
-) -> IResult<&str, (Option<String>, Option<String>), VerboseError<&str>> {
+) -> IResult<&str, (Option<HAlign>, Option<VAlign>), VerboseError<&str>> {
     tuple((
         opt(terminated(
             alt((
-                value("left".to_string(), tag("left")),
-                value("right".to_string(), tag("right")),
-                value("center".to_string(), tag("center")),
+                value(HAlign::Left, tag("left")),
+                value(HAlign::Right, tag("right")),
+                value(HAlign::Center, tag("center")),
             )),
             char('/'),
         )),
         opt(terminated(
             alt((
-                value("top".to_string(), tag("top")),
-                value("bottom".to_string(), tag("bottom")),
-                value("middle".to_string(), tag("middle")),
+                value(VAlign::Top, tag("top")),
+                value(VAlign::Bottom, tag("bottom")),
+                value(VAlign::Middle, tag("middle")),
             )),
             char('/'),
         )),
@@ -307,7 +309,7 @@ fn parse_path(input: &str) -> IResult<&str, Params, VerboseError<&str>> {
 mod tests {
 
     use super::*;
-    use crate::cyberpunkpath::params::{TrimBy, H_ALIGN_LEFT, V_ALIGN_TOP};
+    use crate::cyberpunkpath::params::{HAlign, TrimBy, VAlign};
     use nom::error::convert_error;
     use pretty_assertions::assert_eq;
 
@@ -331,8 +333,8 @@ mod tests {
             meta: true,
             h_flip: true,
             v_flip: true,
-            h_align: Some(H_ALIGN_LEFT.to_string()),
-            v_align: Some(V_ALIGN_TOP.to_string()),
+            h_align: Some(HAlign::Left),
+            v_align: Some(VAlign::Top),
             smart: true,
             fit_in: true,
             filters: vec![Filter {
@@ -410,8 +412,8 @@ mod tests {
             meta: true,
             h_flip: true,
             v_flip: true,
-            h_align: Some(H_ALIGN_LEFT.to_string()),
-            v_align: Some(V_ALIGN_TOP.to_string()),
+            h_align: Some(HAlign::Left),
+            v_align: Some(VAlign::Top),
             smart: true,
             fit_in: true,
             filters: vec![Filter { name: Some("some_filter".to_string()), args: None }],

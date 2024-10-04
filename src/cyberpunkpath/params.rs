@@ -1,11 +1,70 @@
+use core::fmt;
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
-use serde::{Deserialize, Serialize};
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
+pub enum HAlign {
+    #[serde(rename = "left")]
+    Left,
+    #[serde(rename = "right")]
+    Right,
+    #[serde(rename = "center")]
+    Center,
+}
 
-pub const H_ALIGN_LEFT: &str = "left";
-pub const H_ALIGN_RIGHT: &str = "right";
-pub const V_ALIGN_TOP: &str = "top";
-pub const V_ALIGN_BOTTOM: &str = "bottom";
+impl fmt::Display for HAlign {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            HAlign::Left => write!(f, "left"),
+            HAlign::Right => write!(f, "right"),
+            HAlign::Center => write!(f, "center"),
+        }
+    }
+}
+
+impl FromStr for HAlign {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "left" => Ok(HAlign::Left),
+            "right" => Ok(HAlign::Right),
+            _ => Err(format!("Invalid HAlign value: {}", s)),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
+pub enum VAlign {
+    #[serde(rename = "top")]
+    Top,
+    #[serde(rename = "bottom")]
+    Bottom,
+    #[serde(rename = "middle")]
+    Middle,
+}
+
+impl fmt::Display for VAlign {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            VAlign::Top => write!(f, "top"),
+            VAlign::Bottom => write!(f, "bottom"),
+            VAlign::Middle => write!(f, "middle"),
+        }
+    }
+}
+
+impl FromStr for VAlign {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "top" => Ok(VAlign::Top),
+            "bottom" => Ok(VAlign::Bottom),
+            _ => Err(format!("Invalid VAlign value: {}", s)),
+        }
+    }
+}
 
 // Newtype wrapper around f64
 #[derive(Serialize, Deserialize, Debug, Copy, Clone)]
@@ -84,9 +143,9 @@ pub struct Params {
     pub h_flip: bool,
     pub v_flip: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub h_align: Option<String>,
+    pub h_align: Option<HAlign>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub v_align: Option<String>,
+    pub v_align: Option<VAlign>,
     pub smart: bool,
     pub filters: Vec<Filter>,
 }
