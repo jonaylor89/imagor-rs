@@ -2,7 +2,7 @@ use axum::http::StatusCode;
 use axum::Json;
 use axum::{routing::get, Router};
 use color_eyre::Result;
-use imagor_rs::cyberpunkpath::params::Params;
+use imagor_rs::imagorpath::params::Params;
 use imagor_rs::telemetry::{get_subscriber, init_subscriber};
 use tokio::net::TcpListener;
 use tracing::info;
