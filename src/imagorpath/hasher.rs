@@ -1,13 +1,15 @@
 use super::{generate::generate_path, params};
 use argon2::{
-    password_hash::SaltString, Algorithm, Argon2, Params, PasswordHash, PasswordVerifier, Version,
+    password_hash::SaltString, Algorithm, Argon2, Params, PasswordHash, PasswordHasher,
+    PasswordVerifier, Version,
 };
+
 use color_eyre::{
     eyre::{Context, Error},
     Result,
 };
 use hex;
-use secrecy::{ExposeSecret, SecretBox};
+use secrecy::{ExposeSecret, SecretBox, SecretString};
 use sha1::{Digest, Sha1};
 
 #[derive(thiserror::Error, Debug)]
@@ -112,8 +114,8 @@ pub fn size_suffix_result_storage_hasher(p: &params::Params) -> String {
     skip(expected_password_hash, password_candidate)
 )]
 pub fn verify_hash(
-    expected_password_hash: SecretBox<String>,
-    password_candidate: SecretBox<String>,
+    expected_password_hash: SecretString,
+    password_candidate: SecretString,
 ) -> Result<(), AuthError> {
     let expected_password_hash = PasswordHash::new(expected_password_hash.expose_secret())
         .context("Failed to parse hash in PHC string format.")?;
@@ -127,7 +129,7 @@ pub fn verify_hash(
         .map_err(AuthError::InvalidCredentials)
 }
 
-fn compute_hash(path: String) -> Result<SecretBox<String>> {
+fn compute_hash(path: String) -> Result<SecretString> {
     let salt = SaltString::generate(&mut rand::thread_rng());
     let hash_password = Argon2::new(
         Algorithm::Argon2id,
@@ -135,9 +137,10 @@ fn compute_hash(path: String) -> Result<SecretBox<String>> {
         Params::new(15_000, 2, 1, None).unwrap(),
     )
     .hash_password(path.as_bytes(), &salt);
+
     let password_hash = hash_password?.to_string();
 
-    Ok(SecretBox::new(password_hash))
+    Ok(SecretBox::from(password_hash))
 }
 
 #[cfg(test)]
@@ -148,19 +151,23 @@ mod tests {
     use crate::imagorpath::{params::Params, parse::parse_path};
 
     #[test]
-    fn test_hasher() {
-        let mut p = parse_path("fit-in/16x17/foobar").unwrap();
-        assert_eq!(
-            digest_result_storage_hasher(&p),
-            "d5/c2/804e5d81c475bee50f731db17ee613f43262"
-        );
-        p.path = None;
+    fn test_digest_result_storage_hasher() {
+        let (_, p) = parse_path("fit-in/16x17/foobar").unwrap();
         assert_eq!(
             digest_result_storage_hasher(&p),
             "d5/c2/804e5d81c475bee50f731db17ee613f43262"
         );
 
-        p = parse_path("fit-in/16x17/foobar").unwrap();
+        let p_without_path = Params { path: None, ..p };
+        assert_eq!(
+            digest_result_storage_hasher(&p_without_path),
+            "d5/c2/804e5d81c475bee50f731db17ee613f43262"
+        );
+    }
+
+    #[test]
+    fn test_suffix_result_storage_hasher_fit_in() {
+        let (_, p) = parse_path("fit-in/16x17/foobar").unwrap();
         assert_eq!(
             suffix_result_storage_hasher(&p),
             "foobar.d5c2804e5d81c475bee5"
@@ -169,13 +176,17 @@ mod tests {
             size_suffix_result_storage_hasher(&p),
             "foobar.d5c2804e5d81c475bee5_16x17"
         );
-        p.path = None;
+
+        let p_without_path = Params { path: None, ..p };
         assert_eq!(
-            suffix_result_storage_hasher(&p),
+            suffix_result_storage_hasher(&p_without_path),
             "foobar.d5c2804e5d81c475bee5"
         );
+    }
 
-        p = parse_path("17x19/smart/example.com/foobar").unwrap();
+    #[test]
+    fn test_suffix_result_storage_hasher_smart() {
+        let (_, p) = parse_path("17x19/smart/example.com/foobar").unwrap();
         assert_eq!(
             suffix_result_storage_hasher(&p),
             "example.com/foobar.ddd349e092cda6d9c729"
@@ -184,8 +195,11 @@ mod tests {
             size_suffix_result_storage_hasher(&p),
             "example.com/foobar.ddd349e092cda6d9c729_17x19"
         );
+    }
 
-        p = parse_path("smart/example.com/foobar").unwrap();
+    #[test]
+    fn test_suffix_result_storage_hasher_smart_no_size() {
+        let (_, p) = parse_path("smart/example.com/foobar").unwrap();
         assert_eq!(
             size_suffix_result_storage_hasher(&p),
             "example.com/foobar.afa3503c0d76bc49eccd"
@@ -194,17 +208,11 @@ mod tests {
             suffix_result_storage_hasher(&p),
             "example.com/foobar.afa3503c0d76bc49eccd"
         );
+    }
 
-        p = parse_path("166x169/top/foobar.jpg").unwrap();
-        assert_eq!(
-            suffix_result_storage_hasher(&p),
-            "foobar.45d8ebb31bd4ed80c26e.jpg"
-        );
-        assert_eq!(
-            size_suffix_result_storage_hasher(&p),
-            "foobar.45d8ebb31bd4ed80c26e_166x169.jpg"
-        );
-        p.path = None;
+    #[test]
+    fn test_suffix_result_storage_hasher_with_extension() {
+        let (_, p) = parse_path("166x169/top/foobar.jpg").unwrap();
         assert_eq!(
             suffix_result_storage_hasher(&p),
             "foobar.45d8ebb31bd4ed80c26e.jpg"
@@ -212,8 +220,27 @@ mod tests {
     }
 
     #[test]
-    fn test_suffix_result_storage_hasher() {
-        let mut p = Params {
+    fn test_size_suffix_result_storage_hasher_with_extension() {
+        let (_, p) = parse_path("166x169/top/foobar.jpg").unwrap();
+        assert_eq!(
+            size_suffix_result_storage_hasher(&p),
+            "foobar.45d8ebb31bd4ed80c26e_166x169.jpg"
+        );
+    }
+
+    #[test]
+    fn test_suffix_result_storage_hasher_with_extension_no_path() {
+        let (_, p) = parse_path("166x169/top/foobar.jpg").unwrap();
+        let p_without_path = Params { path: None, ..p };
+        assert_eq!(
+            suffix_result_storage_hasher(&p_without_path),
+            "foobar.45d8ebb31bd4ed80c26e.jpg"
+        );
+    }
+
+    #[test]
+    fn test_suffix_result_storage_hasher_with_format() {
+        let p = Params {
             smart: true,
             width: Some(17),
             height: Some(19),
@@ -233,8 +260,11 @@ mod tests {
             size_suffix_result_storage_hasher(&p),
             "example.com/foobar.8aade9060badfcb289f9_17x19.webp"
         );
+    }
 
-        p = Params {
+    #[test]
+    fn test_suffix_result_storage_hasher_with_meta() {
+        let p = Params {
             meta: true,
             smart: true,
             width: Some(17),
@@ -251,8 +281,11 @@ mod tests {
             size_suffix_result_storage_hasher(&p),
             "example.com/foobar.d72ff6ef20ba41fa570c_17x19.json"
         );
+    }
 
-        p = Params {
+    #[test]
+    fn test_suffix_result_storage_hasher_with_meta_and_format() {
+        let p = Params {
             meta: true,
             smart: true,
             width: Some(17),

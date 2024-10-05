@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use super::params::{Filter, HAlign, Params, TrimBy, VAlign, F32};
 use axum::{
     async_trait,
@@ -309,7 +307,7 @@ pub fn parse_path(input: &str) -> IResult<&str, Params, VerboseError<&str>> {
 mod tests {
 
     use super::*;
-    use crate::cyberpunkpath::params::{HAlign, TrimBy, VAlign};
+    use crate::imagorpath::params::{HAlign, TrimBy, VAlign};
     use nom::error::convert_error;
     use pretty_assertions::assert_eq;
 
