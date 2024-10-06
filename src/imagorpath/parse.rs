@@ -49,6 +49,15 @@ where
     }
 }
 
+impl TryFrom<&str> for Params {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let (_, path) = parse_path(value).map_err(|e| format!("Failed to parse path: {}", e))?;
+        Ok(path)
+    }
+}
+
 fn parse_unsafe(input: &str) -> IResult<&str, bool, VerboseError<&str>> {
     value(false, tag("unsafe/"))(input)
 }

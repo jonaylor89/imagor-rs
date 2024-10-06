@@ -129,7 +129,8 @@ pub fn verify_hash(
         .map_err(AuthError::InvalidCredentials)
 }
 
-fn compute_hash(path: String) -> Result<SecretString> {
+#[tracing::instrument(name = "Compute password hash", skip(path))]
+pub fn compute_hash(path: String) -> Result<SecretString> {
     let salt = SaltString::generate(&mut rand::thread_rng());
     let hash_password = Argon2::new(
         Algorithm::Argon2id,

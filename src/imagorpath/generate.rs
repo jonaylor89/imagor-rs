@@ -1,6 +1,13 @@
+use super::params::{HAlign, Params, TrimBy, VAlign, F32};
+use core::fmt;
 use url::form_urlencoded;
 
-use super::params::{HAlign, Params, TrimBy, VAlign, F32};
+impl fmt::Display for Params {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let unsafe_string = to_unsafe_string(self);
+        write!(f, "{}", unsafe_string)
+    }
+}
 
 pub fn generate_path(p: &Params) -> String {
     let parts = vec![
@@ -203,19 +210,16 @@ fn generate_image(p: &Params) -> Option<String> {
     })
 }
 
-pub fn generate_unsafe(p: &Params) -> String {
-    generate(p, None)
-}
-
-pub fn generate(p: &Params, signer: Option<&dyn Signer>) -> String {
-    let img_path = generate_path(p);
-    if let Some(signer) = signer {
-        format!("{}/{}", signer.sign(&img_path), img_path)
-    } else {
-        format!("unsafe/{}", img_path)
-    }
-}
-
 pub trait Signer {
     fn sign(&self, path: &str) -> String;
+}
+
+pub fn to_unsafe_string(p: &Params) -> String {
+    let img_path = generate_path(p);
+    format!("unsafe/{}", img_path)
+}
+
+pub fn to_signed_string<S: Signer>(p: &Params, signer: S) -> String {
+    let img_path = generate_path(p);
+    format!("{}/{}", signer.sign(&img_path), img_path)
 }

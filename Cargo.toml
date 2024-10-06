@@ -28,3 +28,5 @@ argon2 = { version = "0.4.1", features = ["std"] }
 secrecy = { version = "0.10.2", feature = ["serde"] }
 rand = "0.8.5"
 thiserror = "1.0.64"
+google-cloud-storage = "0.22.1"
+infer = "0.16.0"

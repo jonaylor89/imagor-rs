@@ -69,8 +69,8 @@ where
     result
 }
 
-pub fn normalize(image: &str, safe_chars: Option<SafeCharsType>) -> String {
-    let cleaned = image
+pub fn normalize(key: &str, safe_chars: &SafeCharsType) -> String {
+    let cleaned = key
         .replace("\r\n", "")
         .replace('\r', "")
         .replace('\n', "")
@@ -83,8 +83,5 @@ pub fn normalize(image: &str, safe_chars: Option<SafeCharsType>) -> String {
     let cleaned = cleaned.trim_matches('/');
     let path = Path::new(&cleaned).to_str().unwrap_or(&cleaned);
 
-    match safe_chars {
-        Some(sc) => escape(path, |c| sc.should_escape(c)),
-        None => escape(path, |c| SafeCharsType::Default.should_escape(c)),
-    }
+    escape(path, |c| safe_chars.should_escape(c))
 }
