@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use axum::extract::{MatchedPath, Request};
 use axum::http::StatusCode;
 use axum::Json;
 use axum::{routing::get, Router};
@@ -10,7 +11,8 @@ use imagor_rs::state::AppStateDyn;
 use imagor_rs::storage::file::FileStorage;
 use imagor_rs::telemetry::{get_subscriber, init_subscriber};
 use tokio::net::TcpListener;
-use tracing::info;
+use tower_http::trace::TraceLayer;
+use tracing::{info, info_span};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -34,6 +36,23 @@ async fn main() -> Result<()> {
         .route("/health", get(health_check))
         .route("/", get(root))
         .route("/*imagorpath", get(handler))
+        .layer(
+            TraceLayer::new_for_http().make_span_with(|request: &Request<_>| {
+                // Log the matched route's path (with placeholders not filled in).
+                // Use request.uri() or OriginalUri if you want the real path.
+                let matched_path = request
+                    .extensions()
+                    .get::<MatchedPath>()
+                    .map(MatchedPath::as_str);
+
+                info_span!(
+                    "http_request",
+                    method = ?request.method(),
+                    matched_path,
+                    some_other_field = tracing::field::Empty,
+                )
+            }),
+        )
         .with_state(state);
 
     let listener = TcpListener::bind("127.0.0.1:8080")
