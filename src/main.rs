@@ -1,8 +1,13 @@
+use std::sync::Arc;
+
 use axum::http::StatusCode;
 use axum::Json;
 use axum::{routing::get, Router};
 use color_eyre::Result;
+use imagor_rs::imagorpath::normalize::SafeCharsType;
 use imagor_rs::imagorpath::params::Params;
+use imagor_rs::state::AppStateDyn;
+use imagor_rs::storage::file::FileStorage;
 use imagor_rs::telemetry::{get_subscriber, init_subscriber};
 use tokio::net::TcpListener;
 use tracing::info;
@@ -16,10 +21,20 @@ async fn main() -> Result<()> {
 
     // let configuration = configuration::read().expect("Failed to read configuration");
 
+    let storage = FileStorage::new(
+        "base_dir".into(),
+        "images_dir".into(),
+        SafeCharsType::Default,
+    );
+    let state = AppStateDyn {
+        storage: Arc::new(storage.clone()),
+    };
+
     let app = Router::new()
         .route("/health", get(health_check))
         .route("/", get(root))
-        .route("/*imagorpath", get(handler));
+        .route("/*imagorpath", get(handler))
+        .with_state(state);
 
     let listener = TcpListener::bind("127.0.0.1:8080")
         .await

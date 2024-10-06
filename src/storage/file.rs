@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use tokio::fs::{File, OpenOptions};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
+#[derive(Debug, Clone)]
 pub struct FileStorage {
     pub base_dir: PathBuf,
     pub path_prefix: String,

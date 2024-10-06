@@ -9,6 +9,7 @@ use google_cloud_storage::http::objects::get::GetObjectRequest;
 use google_cloud_storage::http::objects::upload::{Media, UploadObjectRequest, UploadType};
 use std::time;
 
+#[derive(Clone)]
 pub struct GCloudStorage {
     pub base_dir: String,
     pub path_prefix: String,
