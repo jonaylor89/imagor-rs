@@ -37,6 +37,8 @@ where
 
         info!("Parsing path: {}", path);
 
+        // TODO: check auth of imagorpath
+
         // parse endpoint
         let (_, params) = parse_path(&path).map_err(|e| {
             (

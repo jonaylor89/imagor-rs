@@ -31,3 +31,4 @@ thiserror = "1.0.64"
 google-cloud-storage = "0.22.1"
 infer = "0.16.0"
 tower-http = { version = "0.6.1", features = ["trace"] }
+dotenvy = "0.15.7"
