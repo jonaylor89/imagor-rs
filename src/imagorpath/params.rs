@@ -1,6 +1,7 @@
 use core::fmt;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use thiserror::Error;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum HAlign {
@@ -181,25 +182,40 @@ pub enum Filter {
     Watermark(WatermarkParams),
 }
 
+#[derive(Error, Debug, Clone)]
+pub enum FilterParseError {
+    #[error("Unknown filter: {0}")]
+    UnknownFilter(String),
+
+    #[error("Invalid argument: {0}")]
+    InvalidArgument(String),
+
+    #[error("Missing required argument")]
+    MissingArgument,
+
+    #[error("Parse error: {0}")]
+    ParseError(String),
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct LabelParams {
-    text: String,
-    x: LabelPosition,
-    y: LabelPosition,
-    size: u32,
-    color: Color,
-    alpha: Option<u8>,
-    font: Option<String>,
+    pub text: String,
+    pub x: LabelPosition,
+    pub y: LabelPosition,
+    pub size: u32,
+    pub color: Color,
+    pub alpha: Option<u8>,
+    pub font: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct WatermarkParams {
-    image: String,
-    x: WatermarkPosition,
-    y: WatermarkPosition,
-    alpha: u8,
-    w_ratio: Option<F32>,
-    h_ratio: Option<F32>,
+    pub image: String,
+    pub x: WatermarkPosition,
+    pub y: WatermarkPosition,
+    pub alpha: u8,
+    pub w_ratio: Option<F32>,
+    pub h_ratio: Option<F32>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]

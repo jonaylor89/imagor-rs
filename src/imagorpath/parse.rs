@@ -1,4 +1,7 @@
-use super::params::{Filter, HAlign, Params, TrimBy, VAlign, F32};
+use super::params::{
+    Color, Filter, HAlign, LabelParams, LabelPosition, Params, RoundedCornerParams, TrimBy, VAlign,
+    WatermarkParams, WatermarkPosition, F32,
+};
 use axum::{
     async_trait,
     extract::FromRequestParts,
@@ -11,7 +14,7 @@ use nom::{
     character::complete::{alphanumeric1, char, digit1},
     combinator::{map, opt, recognize, success, value},
     error::{context, ErrorKind, VerboseError, VerboseErrorKind},
-    multi::{many1, separated_list0},
+    multi::{many1, separated_list0, separated_list1},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
     IResult,
 };
@@ -196,41 +199,173 @@ fn take_until_unbalanced(input: &str) -> IResult<&str, &str, VerboseError<&str>>
     }))
 }
 
+fn parse_filter(input: &str) -> IResult<&str, Filter, VerboseError<&str>> {
+    let (input, name) = take_while1(|c: char| c.is_alphanumeric() || c == '_')(input)?;
+    let (input, args) = opt(delimited(char('('), take_while1(|c| c != ')'), char(')')))(input)?;
+
+    match name.to_lowercase().as_str() {
+        "backgroundcolor" => Ok((
+            input,
+            Filter::BackgroundColor(args.unwrap_or("").to_string()),
+        )),
+        "blur" => map(parse_f32, Filter::Blur)(args.unwrap_or("")),
+        "brightness" => map(nom::character::complete::i32, Filter::Brightness)(args.unwrap_or("")),
+        "contrast" => map(nom::character::complete::i32, Filter::Contrast)(args.unwrap_or("")),
+        "fill" => Ok((input, Filter::Fill(args.unwrap_or("").to_string()))),
+        "focal" => Ok((input, Filter::Focal(args.unwrap_or("").to_string()))),
+        "format" => Ok((input, Filter::Format(args.unwrap_or("").to_string()))),
+        "grayscale" => Ok((input, Filter::Grayscale)),
+        "hue" => map(nom::character::complete::i32, Filter::Hue)(args.unwrap_or("")),
+        "label" => map(parse_label_params, Filter::Label)(args.unwrap_or("")),
+        "maxbytes" => map(nom::character::complete::u64, |v| {
+            Filter::MaxBytes(v as usize)
+        })(args.unwrap_or("")),
+        "maxframes" => map(nom::character::complete::u64, |v| {
+            Filter::MaxFrames(v as usize)
+        })(args.unwrap_or("")),
+        "orient" => map(nom::character::complete::i32, Filter::Orient)(args.unwrap_or("")),
+        "page" => {
+            map(nom::character::complete::u64, |v| Filter::Page(v as usize))(args.unwrap_or(""))
+        }
+        "dpi" => map(nom::character::complete::u32, Filter::Dpi)(args.unwrap_or("")),
+        "proportion" => map(parse_f32, Filter::Proportion)(args.unwrap_or("")),
+        "quality" => map(nom::character::complete::u8, Filter::Quality)(args.unwrap_or("")),
+        "rgb" => map(parse_rgb, |(r, g, b)| Filter::Rgb(r, g, b))(args.unwrap_or("")),
+        "rotate" => map(nom::character::complete::i32, Filter::Rotate)(args.unwrap_or("")),
+        "roundcorner" => map(parse_rounded_corner_params, Filter::RoundCorner)(args.unwrap_or("")),
+        "saturation" => map(nom::character::complete::i32, Filter::Saturation)(args.unwrap_or("")),
+        "sharpen" => map(parse_f32, Filter::Sharpen)(args.unwrap_or("")),
+        "stripexif" => Ok((input, Filter::StripExif)),
+        "stripicc" => Ok((input, Filter::StripIcc)),
+        "stripmetadata" => Ok((input, Filter::StripMetadata)),
+        "upscale" => Ok((input, Filter::Upscale)),
+        "watermark" => map(parse_watermark_params, Filter::Watermark)(args.unwrap_or("")),
+        _ => Err(nom::Err::Error(VerboseError {
+            errors: vec![(input, VerboseErrorKind::Context("Unknown filter"))],
+        })),
+    }
+}
+
 fn parse_filters(input: &str) -> IResult<&str, Vec<Filter>, VerboseError<&str>> {
+    preceded(
+        tag("filters:"),
+        terminated(separated_list0(char(':'), parse_filter), opt(char('/'))),
+    )(input)
+}
+
+fn parse_rgb(input: &str) -> IResult<&str, (i32, i32, i32), VerboseError<&str>> {
+    let (input, rgb) = separated_list1(char(','), nom::character::complete::i32)(input)?;
+    if rgb.len() != 3 {
+        Err(nom::Err::Error(VerboseError {
+            errors: vec![(input, VerboseErrorKind::Context("RGB requires 3 values"))],
+        }))
+    } else {
+        Ok((input, (rgb[0], rgb[1], rgb[2])))
+    }
+}
+
+fn parse_label_params(input: &str) -> IResult<&str, LabelParams, VerboseError<&str>> {
+    let (input, (text, x, y, size, color, alpha, font)) = tuple((
+        take_while1(|c| c != ','),
+        preceded(char(','), parse_label_position),
+        preceded(char(','), parse_label_position),
+        preceded(char(','), nom::character::complete::u32),
+        preceded(char(','), parse_color),
+        opt(preceded(char(','), nom::character::complete::u8)),
+        opt(preceded(char(','), take_while1(|c| c != ','))),
+    ))(input)?;
+
+    Ok((
+        input,
+        LabelParams {
+            text: text.to_string(),
+            x,
+            y,
+            size,
+            color,
+            alpha,
+            font: font.map(|s| s.to_string()),
+        },
+    ))
+}
+
+fn parse_label_position(input: &str) -> IResult<&str, LabelPosition, VerboseError<&str>> {
     alt((
-        preceded(
-            tag("filters:"),
-            terminated(
-                separated_list0(
-                    char(':'),
-                    alt((
-                        map(
-                            tuple((
-                                take_while1(|c: char| c.is_alphanumeric() || c == '_'),
-                                delimited(char('('), take_until_unbalanced, char(')')),
-                            )),
-                            |(name, args)| Filter {
-                                name: Some(name.to_string()),
-                                args: if args.is_empty() {
-                                    None
-                                } else {
-                                    Some(args.to_string())
-                                },
-                            },
-                        ),
-                        map(
-                            take_while1(|c: char| c.is_alphanumeric() || c == '_'),
-                            |name: &str| Filter {
-                                name: Some(name.to_string()),
-                                args: None,
-                            },
-                        ),
-                    )),
-                ),
-                opt(char('/')),
-            ),
+        value(LabelPosition::Left, tag("left")),
+        value(LabelPosition::Right, tag("right")),
+        value(LabelPosition::Center, tag("center")),
+        value(LabelPosition::Top, tag("top")),
+        value(LabelPosition::Bottom, tag("bottom")),
+        map(nom::character::complete::i32, LabelPosition::Pixels),
+        map(parse_f32, |f| LabelPosition::Percentage(f)),
+    ))(input)
+}
+
+fn parse_color(input: &str) -> IResult<&str, Color, VerboseError<&str>> {
+    alt((
+        map(
+            preceded(tag("rgb("), terminated(parse_rgb, char(')'))),
+            |(r, g, b)| Color::Rgb(r as u8, g as u8, b as u8),
         ),
-        value(vec![], success(())),
+        map(
+            preceded(tag("#"), take_while1(|c: char| c.is_ascii_hexdigit())),
+            |hex: &str| Color::Hex(hex.to_string()),
+        ),
+        value(Color::Auto, tag("auto")),
+        value(Color::Blur, tag("blur")),
+        value(Color::None, tag("none")),
+        map(
+            take_while1(|c: char| c.is_alphanumeric() || c == '_'),
+            |name: &str| Color::Named(name.to_string()),
+        ),
+    ))(input)
+}
+
+fn parse_rounded_corner_params(
+    input: &str,
+) -> IResult<&str, RoundedCornerParams, VerboseError<&str>> {
+    let (input, (rx, ry, color)) = tuple((
+        nom::character::complete::u32,
+        opt(preceded(char(','), nom::character::complete::u32)),
+        opt(preceded(char(','), parse_color)),
+    ))(input)?;
+
+    Ok((input, RoundedCornerParams { rx, ry, color }))
+}
+
+fn parse_watermark_params(input: &str) -> IResult<&str, WatermarkParams, VerboseError<&str>> {
+    let (input, (image, x, y, alpha, w_ratio, h_ratio)) = tuple((
+        take_while1(|c| c != ','),
+        preceded(char(','), parse_watermark_position),
+        preceded(char(','), parse_watermark_position),
+        preceded(char(','), nom::character::complete::u8),
+        opt(preceded(char(','), parse_f32)),
+        opt(preceded(char(','), parse_f32)),
+    ))(input)?;
+
+    Ok((
+        input,
+        WatermarkParams {
+            image: image.to_string(),
+            x,
+            y,
+            alpha,
+            w_ratio,
+            h_ratio,
+        },
+    ))
+}
+
+fn parse_watermark_position(input: &str) -> IResult<&str, WatermarkPosition, VerboseError<&str>> {
+    alt((
+        value(WatermarkPosition::Left, tag("left")),
+        value(WatermarkPosition::Right, tag("right")),
+        value(WatermarkPosition::Center, tag("center")),
+        value(WatermarkPosition::Top, tag("top")),
+        value(WatermarkPosition::Bottom, tag("bottom")),
+        value(WatermarkPosition::Repeat, tag("repeat")),
+        map(nom::character::complete::i32, WatermarkPosition::Pixels),
+        map(parse_f32, |f| WatermarkPosition::Percentage(f)),
     ))(input)
 }
 
