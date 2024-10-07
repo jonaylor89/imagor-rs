@@ -25,7 +25,5 @@ async fn main() -> Result<()> {
     let app = Application::build(port).await?;
     app.run_until_stopped().await?;
 
-    let (_main_server, _metrics_server) = tokio::join!(start_main_server(), start_metrics_server());
-
     Ok(())
 }

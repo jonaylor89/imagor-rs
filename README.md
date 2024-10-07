@@ -14,5 +14,5 @@ imagor but in rust (mostly for self-learning purposes)
 - [_] enforce auth on main route
 - [_] add cache
 - [_] add config
-- [_] prom metrics
+- [x] prom metrics
 - [_] add tests?
