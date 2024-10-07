@@ -11,11 +11,11 @@ async fn main() -> Result<()> {
         tracing::warn!("failed to parse .env file: {}", e);
     }
 
-    let subscriber = get_subscriber("imagor_rs".into(), "debug".into(), std::io::stdout);
-    init_subscriber(subscriber);
-
     // TODO: set up configs
     // let configuration = configuration::read().expect("Failed to read configuration");
+
+    let subscriber = get_subscriber("imagor_rs".into(), "debug".into(), std::io::stdout);
+    init_subscriber(subscriber);
 
     let port: u16 = std::env::var("PORT")
         .unwrap_or_else(|_| "8080".into())
