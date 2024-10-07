@@ -1,4 +1,5 @@
 use crate::imagorpath::{normalize::SafeCharsType, params::Params};
+use crate::metrics::setup_metrics_recorder;
 use crate::processor::processor::Processor;
 use crate::state::AppStateDyn;
 use crate::storage::file::FileStorage;
@@ -9,6 +10,7 @@ use axum::Json;
 use axum::{serve::Serve, Router};
 use color_eyre::eyre::WrapErr;
 use color_eyre::Result;
+use std::future::ready;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
@@ -40,6 +42,9 @@ impl Application {
 }
 
 async fn run(listener: TcpListener) -> Result<Serve<Router, Router>> {
+    let recorder_handle = setup_metrics_recorder();
+    let app = Router::new();
+
     let storage = FileStorage::new(
         "base_dir".into(),
         "images_dir".into(),
@@ -53,6 +58,7 @@ async fn run(listener: TcpListener) -> Result<Serve<Router, Router>> {
 
     let app = Router::new()
         .route("/health", get(health_check))
+        .route("/metrics", get(move || ready(recorder_handle.render())))
         .route("/", get(root))
         .route("/*imagorpath", get(handler))
         .layer(
