@@ -150,16 +150,137 @@ pub struct Params {
     pub filters: Vec<Filter>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, Eq)]
-pub struct Filter {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub args: Option<String>,
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum Filter {
+    BackgroundColor(String),
+    Blur(F32),
+    Brightness(i32),
+    Contrast(i32),
+    Fill(String),
+    Focal(String),
+    Format(String),
+    Grayscale,
+    Hue(i32),
+    Label(LabelParams),
+    MaxBytes(usize),
+    MaxFrames(usize),
+    Orient(i32),
+    Page(usize),
+    Dpi(u32),
+    Proportion(F32),
+    Quality(u8),
+    Rgb(i32, i32, i32),
+    Rotate(i32),
+    RoundCorner(RoundedCornerParams),
+    Saturation(i32),
+    Sharpen(F32),
+    StripExif,
+    StripIcc,
+    StripMetadata,
+    Upscale,
+    Watermark(WatermarkParams),
 }
 
-impl Filter {
-    pub fn is_empty(&self) -> bool {
-        self.name.is_none() && self.args.is_none()
-    }
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct LabelParams {
+    text: String,
+    x: LabelPosition,
+    y: LabelPosition,
+    size: u32,
+    color: Color,
+    alpha: Option<u8>,
+    font: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct WatermarkParams {
+    image: String,
+    x: WatermarkPosition,
+    y: WatermarkPosition,
+    alpha: u8,
+    w_ratio: Option<F32>,
+    h_ratio: Option<F32>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct RoundedCornerParams {
+    pub rx: u32,
+    pub ry: Option<u32>,
+    pub color: Option<Color>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum Color {
+    Named(String),
+    Hex(String),
+    Rgb(u8, u8, u8),
+    Auto,
+    Blur,
+    None,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum FocalPoint {
+    Region {
+        top_left: (F32, F32),
+        bottom_right: (F32, F32),
+    },
+    Point(F32, F32),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum ImageFormat {
+    Jpeg,
+    Png,
+    Gif,
+    WebP,
+    Tiff,
+    Avif,
+    Jp2,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum Angle {
+    Deg0,
+    Deg90,
+    Deg180,
+    Deg270,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum LabelPosition {
+    Pixels(i32),
+    Percentage(F32),
+    Left,
+    Right,
+    Center,
+    Top,
+    Bottom,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum WatermarkPosition {
+    Pixels(i32),
+    Percentage(F32),
+    Left,
+    Right,
+    Center,
+    Top,
+    Bottom,
+    Repeat,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct RgbAdjustment {
+    pub r: i8,
+    pub g: i8,
+    pub b: i8,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum UtilityFilter {
+    Attachment(Option<String>),
+    Expire(u64),
+    Preview,
+    Raw,
 }
