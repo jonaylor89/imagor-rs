@@ -254,6 +254,25 @@ impl ImageType {
     }
 }
 
+impl std::fmt::Display for ImageType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ImageType::GIF => write!(f, "gif"),
+            ImageType::JPEG => write!(f, "jpeg"),
+            ImageType::PNG => write!(f, "png"),
+            ImageType::MAGICK => write!(f, "magick"),
+            ImageType::PDF => write!(f, "pdf"),
+            ImageType::SVG => write!(f, "svg"),
+            ImageType::TIFF => write!(f, "tiff"),
+            ImageType::WEBP => write!(f, "webp"),
+            ImageType::HEIF => write!(f, "heif"),
+            ImageType::BMP => write!(f, "bmp"),
+            ImageType::AVIF => write!(f, "avif"),
+            ImageType::JP2K => write!(f, "jp2k"),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct LabelParams {
     pub text: String,

@@ -10,13 +10,13 @@ use axum::{
 use color_eyre::Result;
 use nom::{
     branch::alt,
-    bytes::complete::{tag, take_while1},
+    bytes::complete::{tag, tag_no_case, take_while1, take_while_m_n},
     character::complete::{alphanumeric1, char, digit1},
     combinator::{map, opt, recognize, value},
     error::{context, ErrorKind, VerboseError, VerboseErrorKind},
     multi::{many1, separated_list0, separated_list1},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
-    IResult,
+    AsChar, IResult,
 };
 use tracing::info;
 
@@ -199,19 +199,48 @@ fn take_until_unbalanced(input: &str) -> IResult<&str, &str, VerboseError<&str>>
     }))
 }
 
+fn parse_color(input: &str) -> IResult<&str, Color, VerboseError<&str>> {
+    alt((
+        map(tag_no_case("auto"), |_| Color::Auto),
+        map(tag_no_case("blur"), |_| Color::Blur),
+        map(tag_no_case("none"), |_| Color::None),
+        map(
+            tuple((
+                nom::character::complete::u8,
+                char(','),
+                nom::character::complete::u8,
+                char(','),
+                nom::character::complete::u8,
+            )),
+            |(r, _, g, _, b)| Color::Rgb(r, g, b),
+        ),
+        map(
+            preceded(char('#'), take_while_m_n(6, 6, |c: char| c.is_hex_digit())),
+            |hex: &str| Color::Hex(hex.to_string()),
+        ),
+        map(
+            take_while1(|c: char| c.is_alphabetic() || c == '_'),
+            |name: &str| Color::Named(name.to_string()),
+        ),
+    ))(input)
+}
+
 fn parse_filter(input: &str) -> IResult<&str, Filter, VerboseError<&str>> {
     let (input, name) = take_while1(|c: char| c.is_alphanumeric() || c == '_')(input)?;
     let (input, args) = opt(delimited(char('('), take_while1(|c| c != ')'), char(')')))(input)?;
 
     match name.to_lowercase().as_str() {
-        "backgroundcolor" => Ok((
-            input,
-            Filter::BackgroundColor(args.unwrap_or("").to_string()),
-        )),
+        "backgroundcolor" => {
+            let (_, color) = parse_color(args.unwrap_or(""))?;
+            Ok((input, Filter::BackgroundColor(color)))
+        }
         "blur" => map(parse_f32, Filter::Blur)(args.unwrap_or("")),
         "brightness" => map(nom::character::complete::i32, Filter::Brightness)(args.unwrap_or("")),
         "contrast" => map(nom::character::complete::i32, Filter::Contrast)(args.unwrap_or("")),
-        "fill" => Ok((input, Filter::Fill(args.unwrap_or("").to_string()))),
+        "fill" => {
+            let (_, color) = parse_color(args.unwrap_or(""))?;
+            Ok((input, Filter::Fill(color)))
+        }
         "focal" => Ok((input, Filter::Focal(args.unwrap_or("").to_string()))),
         "format" => {
             let image_type = match args.unwrap_or("").to_uppercase().as_str() {
@@ -322,25 +351,25 @@ fn parse_label_position(input: &str) -> IResult<&str, LabelPosition, VerboseErro
     ))(input)
 }
 
-fn parse_color(input: &str) -> IResult<&str, Color, VerboseError<&str>> {
-    alt((
-        map(
-            preceded(tag("rgb("), terminated(parse_rgb, char(')'))),
-            |(r, g, b)| Color::Rgb(r as u8, g as u8, b as u8),
-        ),
-        map(
-            preceded(tag("#"), take_while1(|c: char| c.is_ascii_hexdigit())),
-            |hex: &str| Color::Hex(hex.to_string()),
-        ),
-        value(Color::Auto, tag("auto")),
-        value(Color::Blur, tag("blur")),
-        value(Color::None, tag("none")),
-        map(
-            take_while1(|c: char| c.is_alphanumeric() || c == '_'),
-            |name: &str| Color::Named(name.to_string()),
-        ),
-    ))(input)
-}
+// fn parse_color(input: &str) -> IResult<&str, Color, VerboseError<&str>> {
+//     alt((
+//         map(
+//             preceded(tag("rgb("), terminated(parse_rgb, char(')'))),
+//             |(r, g, b)| Color::Rgb(r as u8, g as u8, b as u8),
+//         ),
+//         map(
+//             preceded(tag("#"), take_while1(|c: char| c.is_ascii_hexdigit())),
+//             |hex: &str| Color::Hex(hex.to_string()),
+//         ),
+//         value(Color::Auto, tag("auto")),
+//         value(Color::Blur, tag("blur")),
+//         value(Color::None, tag("none")),
+//         map(
+//             take_while1(|c: char| c.is_alphanumeric() || c == '_'),
+//             |name: &str| Color::Named(name.to_string()),
+//         ),
+//     ))(input)
+// }
 
 fn parse_rounded_corner_params(
     input: &str,
@@ -535,7 +564,7 @@ mod tests {
             crop_right: Some(F32(100.0)),
             crop_bottom: Some(F32(150.0)),
             filters: vec![
-                Filter::Fill("cyan".to_string())
+                Filter::Fill(Color::Named("cyan".to_string()))
             ],
             ..Default::default()
         };
