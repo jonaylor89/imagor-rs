@@ -1,6 +1,5 @@
 use crate::imagorpath::{normalize::SafeCharsType, params::Params};
 use crate::metrics::setup_metrics_recorder;
-use crate::processor::processor::Processor;
 use crate::state::AppStateDyn;
 use crate::storage::file::FileStorage;
 use axum::extract::{MatchedPath, Request, State};
@@ -43,17 +42,14 @@ impl Application {
 
 async fn run(listener: TcpListener) -> Result<Serve<Router, Router>> {
     let recorder_handle = setup_metrics_recorder();
-    let app = Router::new();
 
     let storage = FileStorage::new(
         "base_dir".into(),
         "images_dir".into(),
         SafeCharsType::Default,
     );
-    let processor = Processor::new();
     let state = AppStateDyn {
         storage: Arc::new(storage.clone()),
-        processor: Arc::new(processor.clone()),
     };
 
     let app = Router::new()

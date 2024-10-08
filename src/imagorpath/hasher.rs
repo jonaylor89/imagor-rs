@@ -1,3 +1,5 @@
+use crate::imagorpath::params::Filter;
+
 use super::{generate::generate_path, params};
 use argon2::{
     password_hash::SaltString, Algorithm, Argon2, Params, PasswordHash, PasswordHasher,
@@ -52,12 +54,11 @@ pub fn suffix_result_storage_hasher(p: &params::Params) -> String {
             } else {
                 p.filters
                     .iter()
-                    .find_map(|filter| {
-                        if filter.name.as_deref() == Some("format") {
-                            Some(format!(".{}", filter.args.as_ref().unwrap()))
-                        } else {
-                            None
+                    .find_map(|filter| match filter {
+                        Filter::Format(format) => {
+                            return Some(format!(".{}", format));
                         }
+                        _ => None,
                     })
                     .unwrap_or_else(|| image[dot_idx..].to_string())
             };
@@ -94,12 +95,9 @@ pub fn size_suffix_result_storage_hasher(p: &params::Params) -> String {
             } else {
                 p.filters
                     .iter()
-                    .find_map(|filter| {
-                        if filter.name.as_deref() == Some("format") {
-                            Some(format!(".{}", filter.args.as_ref().unwrap()))
-                        } else {
-                            None
-                        }
+                    .find_map(|filter| match filter {
+                        Filter::Format(format) => Some(format!(".{}", format)),
+                        _ => None,
                     })
                     .unwrap_or_else(|| image[dot_idx..].to_string())
             };
@@ -246,10 +244,7 @@ mod tests {
             width: Some(17),
             height: Some(19),
             image: Some("example.com/foobar.jpg".to_string()),
-            filters: vec![Filter {
-                name: Some("format".to_string()),
-                args: Some("webp".to_string()),
-            }],
+            filters: vec![Filter::Format("webp".into())],
             ..Default::default()
         };
         println!("{}", generate_path(&p));
@@ -292,10 +287,7 @@ mod tests {
             width: Some(17),
             height: Some(19),
             image: Some("example.com/foobar.jpg".to_string()),
-            filters: vec![Filter {
-                name: Some("format".to_string()),
-                args: Some("webp".to_string()),
-            }],
+            filters: vec![Filter::Format("webp".into())],
             ..Default::default()
         };
         println!("{}", generate_path(&p));

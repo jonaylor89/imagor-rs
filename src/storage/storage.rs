@@ -36,4 +36,8 @@ impl Blob {
 
         Blob { data, content_type }
     }
+
+    pub fn supports_animation(&self) -> bool {
+        self.content_type.starts_with("image/gif") || self.content_type.starts_with("image/webp")
+    }
 }

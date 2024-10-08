@@ -153,13 +153,13 @@ pub struct Params {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum Filter {
-    BackgroundColor(String),
+    BackgroundColor(Color),
     Blur(F32),
     Brightness(i32),
     Contrast(i32),
-    Fill(String),
+    Fill(Color),
     Focal(String),
-    Format(String),
+    Format(ImageType),
     Grayscale,
     Hue(i32),
     Label(LabelParams),
@@ -182,6 +182,40 @@ pub enum Filter {
     Watermark(WatermarkParams),
 }
 
+impl std::fmt::Display for Filter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Filter::BackgroundColor(color) => write!(f, "background_color({})", color),
+            Filter::Blur(amount) => write!(f, "blur({})", amount.0),
+            Filter::Brightness(value) => write!(f, "brightness({})", value),
+            Filter::Contrast(value) => write!(f, "contrast({})", value),
+            Filter::Fill(color) => write!(f, "fill({})", color),
+            Filter::Focal(value) => write!(f, "focal({})", value),
+            Filter::Format(format) => write!(f, "format({:?})", format),
+            Filter::Grayscale => write!(f, "grayscale()"),
+            Filter::Hue(value) => write!(f, "hue({})", value),
+            Filter::Label(params) => write!(f, "label({:?})", params),
+            Filter::MaxBytes(value) => write!(f, "max_bytes({})", value),
+            Filter::MaxFrames(value) => write!(f, "max_frames({})", value),
+            Filter::Orient(value) => write!(f, "orient({})", value),
+            Filter::Page(value) => write!(f, "page({})", value),
+            Filter::Dpi(value) => write!(f, "dpi({})", value),
+            Filter::Proportion(value) => write!(f, "proportion({})", value.0),
+            Filter::Quality(value) => write!(f, "quality({})", value),
+            Filter::Rgb(r, g, b) => write!(f, "rgb({},{},{})", r, g, b),
+            Filter::Rotate(value) => write!(f, "rotate({})", value),
+            Filter::RoundCorner(params) => write!(f, "round_corner({:?})", params),
+            Filter::Saturation(value) => write!(f, "saturation({})", value),
+            Filter::Sharpen(value) => write!(f, "sharpen({})", value.0),
+            Filter::StripExif => write!(f, "strip_exif()"),
+            Filter::StripIcc => write!(f, "strip_icc()"),
+            Filter::StripMetadata => write!(f, "strip_metadata()"),
+            Filter::Upscale => write!(f, "upscale()"),
+            Filter::Watermark(params) => write!(f, "watermark({:?})", params),
+        }
+    }
+}
+
 #[derive(Error, Debug, Clone)]
 pub enum FilterParseError {
     #[error("Unknown filter: {0}")]
@@ -195,6 +229,29 @@ pub enum FilterParseError {
 
     #[error("Parse error: {0}")]
     ParseError(String),
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ImageType {
+    GIF,
+    JPEG,
+    PNG,
+    MAGICK,
+    PDF,
+    SVG,
+    TIFF,
+    WEBP,
+    HEIF,
+    BMP,
+    AVIF,
+    JP2K,
+}
+
+impl ImageType {
+    pub fn is_animation_supported(&self) -> bool {
+        matches!(self, ImageType::GIF | ImageType::WEBP)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -233,6 +290,19 @@ pub enum Color {
     Auto,
     Blur,
     None,
+}
+
+impl fmt::Display for Color {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Color::Named(name) => write!(f, "{}", name),
+            Color::Hex(hex) => write!(f, "{}", hex),
+            Color::Rgb(r, g, b) => write!(f, "{},{},{}", r, g, b),
+            Color::Auto => write!(f, "auto"),
+            Color::Blur => write!(f, "blur"),
+            Color::None => write!(f, "none"),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]

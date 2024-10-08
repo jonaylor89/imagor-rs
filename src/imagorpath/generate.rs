@@ -175,12 +175,11 @@ fn generate_smart(p: &Params) -> Option<String> {
 
 fn generate_filters(p: &Params) -> Option<String> {
     if !p.filters.is_empty() {
-        let filters: Vec<String> = p
+        let filters = p
             .filters
             .iter()
-            .filter(|f| !f.is_empty())
-            .map(|f| format!("{}({})", f.name.as_ref().unwrap(), f.args.as_ref().unwrap()))
-            .collect();
+            .map(|f| f.to_string())
+            .collect::<Vec<String>>();
         Some(format!("filters:{}", filters.join(":")))
     } else {
         None

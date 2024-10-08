@@ -1,6 +1,6 @@
 use super::params::{
-    Color, Filter, HAlign, LabelParams, LabelPosition, Params, RoundedCornerParams, TrimBy, VAlign,
-    WatermarkParams, WatermarkPosition, F32,
+    Color, Filter, HAlign, ImageType, LabelParams, LabelPosition, Params, RoundedCornerParams,
+    TrimBy, VAlign, WatermarkParams, WatermarkPosition, F32,
 };
 use axum::{
     async_trait,
@@ -12,7 +12,7 @@ use nom::{
     branch::alt,
     bytes::complete::{tag, take_while1},
     character::complete::{alphanumeric1, char, digit1},
-    combinator::{map, opt, recognize, success, value},
+    combinator::{map, opt, recognize, value},
     error::{context, ErrorKind, VerboseError, VerboseErrorKind},
     multi::{many1, separated_list0, separated_list1},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
@@ -213,7 +213,28 @@ fn parse_filter(input: &str) -> IResult<&str, Filter, VerboseError<&str>> {
         "contrast" => map(nom::character::complete::i32, Filter::Contrast)(args.unwrap_or("")),
         "fill" => Ok((input, Filter::Fill(args.unwrap_or("").to_string()))),
         "focal" => Ok((input, Filter::Focal(args.unwrap_or("").to_string()))),
-        "format" => Ok((input, Filter::Format(args.unwrap_or("").to_string()))),
+        "format" => {
+            let image_type = match args.unwrap_or("").to_uppercase().as_str() {
+                "gif" => ImageType::GIF,
+                "jpeg" => ImageType::JPEG,
+                "png" => ImageType::PNG,
+                "magick" => ImageType::MAGICK,
+                "pdf" => ImageType::PDF,
+                "svg" => ImageType::SVG,
+                "tiff" => ImageType::TIFF,
+                "webp" => ImageType::WEBP,
+                "heif" => ImageType::HEIF,
+                "bmp" => ImageType::BMP,
+                "avif" => ImageType::AVIF,
+                "jp2k" => ImageType::JP2K,
+                _ => {
+                    return Err(nom::Err::Error(VerboseError {
+                        errors: vec![(input, VerboseErrorKind::Context("Unknown image format"))],
+                    }))
+                }
+            };
+            Ok((input, Filter::Format(image_type)))
+        }
         "grayscale" => Ok((input, Filter::Grayscale)),
         "hue" => map(nom::character::complete::i32, Filter::Hue)(args.unwrap_or("")),
         "label" => map(parse_label_params, Filter::Label)(args.unwrap_or("")),
@@ -458,10 +479,10 @@ mod tests {
 
     #[test]
     fn test_parse_generate_non_url_image() {
-        let uri = "meta/trim/10x11:12x13/fit-in/-300x-200/left/top/smart/filters:some_filter()/img";
+        let uri = "meta/trim/10x11:12x13/fit-in/-300x-200/left/top/smart/filters:grayscale()/img";
         let expected_params = Params {
             path: Some(
-                "meta/trim/10x11:12x13/fit-in/-300x-200/left/top/smart/filters:some_filter()/img"
+                "meta/trim/10x11:12x13/fit-in/-300x-200/left/top/smart/filters:grayscale()/img"
                     .to_string(),
             ),
             image: Some("img".to_string()),
@@ -480,10 +501,7 @@ mod tests {
             v_align: Some(VAlign::Top),
             smart: true,
             fit_in: true,
-            filters: vec![Filter {
-                name: Some("some_filter".to_string()),
-                args: None,
-            }],
+            filters: vec![Filter::Grayscale],
             ..Default::default()
         };
 
@@ -516,7 +534,9 @@ mod tests {
             crop_top: Some(F32(40.0)),
             crop_right: Some(F32(100.0)),
             crop_bottom: Some(F32(150.0)),
-            filters: vec![Filter { name: Some("fill".to_string()), args: Some("cyan".to_string()) }],
+            filters: vec![
+                Filter::Fill("cyan".to_string())
+            ],
             ..Default::default()
         };
 
@@ -539,9 +559,9 @@ mod tests {
 
     #[test]
     fn test_parse_generate_url_image() {
-        let uri = "meta/trim:bottom-right:100/10x11:12x13/fit-in/-300x-200/left/top/smart/filters:some_filter()/s.glbimg.com/es/ge/f/original/2011/03/29/orlandosilva_60.jpg";
+        let uri = "meta/trim:bottom-right:100/10x11:12x13/fit-in/-300x-200/left/top/smart/filters:grayscale()/s.glbimg.com/es/ge/f/original/2011/03/29/orlandosilva_60.jpg";
         let expected_params = Params {
-            path: Some("meta/trim:bottom-right:100/10x11:12x13/fit-in/-300x-200/left/top/smart/filters:some_filter()/s.glbimg.com/es/ge/f/original/2011/03/29/orlandosilva_60.jpg".to_string()),
+            path: Some("meta/trim:bottom-right:100/10x11:12x13/fit-in/-300x-200/left/top/smart/filters:grayscale()/s.glbimg.com/es/ge/f/original/2011/03/29/orlandosilva_60.jpg".to_string()),
             image: Some("s.glbimg.com/es/ge/f/original/2011/03/29/orlandosilva_60.jpg".to_string()),
             trim: true,
             trim_by: TrimBy::BottomRight,
@@ -559,7 +579,9 @@ mod tests {
             v_align: Some(VAlign::Top),
             smart: true,
             fit_in: true,
-            filters: vec![Filter { name: Some("some_filter".to_string()), args: None }],
+            filters: vec![
+                Filter::Grayscale,
+            ],
             ..Default::default()
         };
 
@@ -586,9 +608,16 @@ mod tests {
         let expected = (
             "some/example/img",
             vec![
-                Filter { name: Some("watermark".to_string()), args: Some("s.glbimg.com/filters:label(abc):watermark(aaa.com/fit-in/filters:aaa(bbb))/aaa.jpg,0,0,0".to_string()) },
-                Filter { name: Some("brightness".to_string()), args: Some("-50".to_string()) },
-                Filter { name: Some("grayscale".to_string()), args: None },
+                Filter::Watermark(WatermarkParams {
+                    image: "s.glbimg.com/filters:label(abc):watermark(aaa.com/fit-in/filters:aaa(bbb))/aaa.jpg".to_string(),
+                    x: WatermarkPosition::Pixels(0),
+                    y: WatermarkPosition::Pixels(0),
+                    alpha: 0,
+                    w_ratio: None,
+                    h_ratio: None,
+                }),
+                Filter::Brightness(-50),
+                Filter::Grayscale,
             ],
         );
         let result = parse_filters(input).unwrap();
@@ -601,9 +630,18 @@ mod tests {
         let expected = (
             "",
             vec![
-                Filter { name: Some("watermark".to_string()), args: Some("s.glbimg.com/filters:label(abc):watermark(aaa.com/fit-in/filters:aaa(bbb))/aaa.jpg,0,0,0".to_string()) },
-                Filter { name: Some("brightness".to_string()), args: Some("-50".to_string()) },
-                Filter { name: Some("grayscale".to_string()), args: None },
+                Filter::Watermark(
+                    WatermarkParams {
+                        image: "s.glbimg.com/filters:label(abc):watermark(aaa.com/fit-in/filters:aaa(bbb))/aaa.jpg".to_string(),
+                        x: WatermarkPosition::Pixels(0),
+                        y: WatermarkPosition::Pixels(0),
+                        alpha: 0,
+                        w_ratio: None,
+                        h_ratio: None,
+                    },
+                ),
+                Filter::Brightness(-50),
+                Filter::Grayscale,
             ],
         );
         let result = parse_filters(input).unwrap();
