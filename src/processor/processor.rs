@@ -3,7 +3,6 @@ use crate::{
     storage::storage::Blob,
 };
 use color_eyre::Result;
-use rand::Fill;
 
 pub struct Processor {
     disable_blur: bool,
