@@ -77,16 +77,16 @@ impl Processor {
     #[tracing::instrument(skip(self))]
     pub fn process<L: ImageLoader>(&self, blob: &Blob, params: &Params) -> Result<()> {
         let processing_params = self.preprocess(blob, params);
-        let img = self.load_image(&blob, &params, &processing_params)?;
+        let img = self.load_image(blob, params, &processing_params)?;
         let img = apply_orientation(img, processing_params.orient)?;
-        let (width, height) = calculate_dimensions(&img, &params, processing_params.upscale);
+        let (width, height) = calculate_dimensions(&img, params, processing_params.upscale);
         let img = resize_image(
             img,
             width,
             height,
             params.fit,
             processing_params.upscale,
-            &params,
+            params,
         )?;
 
         let _img = apply_flip(img, params.h_flip, params.v_flip)?;
@@ -129,7 +129,7 @@ impl Processor {
             .filters
             .iter()
             .fold(params_after_blob, |acc, filter| {
-                if self.disable_filters.contains(&filter) {
+                if self.disable_filters.contains(filter) {
                     return acc;
                 }
 

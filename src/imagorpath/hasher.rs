@@ -55,9 +55,7 @@ pub fn suffix_result_storage_hasher(p: &params::Params) -> String {
                 p.filters
                     .iter()
                     .find_map(|filter| match filter {
-                        Filter::Format(format) => {
-                            return Some(format!(".{}", format));
-                        }
+                        Filter::Format(format) => Some(format!(".{}", format)),
                         _ => None,
                     })
                     .unwrap_or_else(|| image[dot_idx..].to_string())
@@ -144,7 +142,7 @@ pub fn compute_hash(path: String) -> Result<SecretString> {
 
 #[cfg(test)]
 mod tests {
-    use params::Filter;
+    use params::{Filter, ImageType};
 
     use super::*;
     use crate::imagorpath::{params::Params, parse::parse_path};
@@ -244,7 +242,7 @@ mod tests {
             width: Some(17),
             height: Some(19),
             image: Some("example.com/foobar.jpg".to_string()),
-            filters: vec![Filter::Format("webp".into())],
+            filters: vec![Filter::Format(ImageType::WEBP)],
             ..Default::default()
         };
         println!("{}", generate_path(&p));
@@ -287,7 +285,7 @@ mod tests {
             width: Some(17),
             height: Some(19),
             image: Some("example.com/foobar.jpg".to_string()),
-            filters: vec![Filter::Format("webp".into())],
+            filters: vec![Filter::Format(ImageType::WEBP)],
             ..Default::default()
         };
         println!("{}", generate_path(&p));

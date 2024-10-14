@@ -42,7 +42,7 @@ where
 
         // TODO: check auth of imagorpath
 
-        let (_, params) = parse_path(&path).map_err(|e| {
+        let (_, params) = parse_path(path).map_err(|e| {
             (
                 StatusCode::BAD_REQUEST,
                 format!("Failed to parse params: {}", e),
@@ -194,7 +194,7 @@ fn take_until_unbalanced(input: &str) -> IResult<&str, &str, VerboseError<&str>>
     let mut depth = 0;
     let mut chars = input.char_indices().peekable();
 
-    while let Some((idx, ch)) = chars.next() {
+    for (idx, ch) in chars {
         match ch {
             '(' => depth += 1,
             ')' => {
@@ -285,7 +285,7 @@ fn parse_filter(input: &str) -> IResult<&str, Filter, VerboseError<&str>> {
         }
         "format" => {
             let image_type = match args.unwrap_or("").to_uppercase().as_str() {
-                "gif" => ImageType::GIF,
+                "GIF" => ImageType::GIF,
                 "jpeg" => ImageType::JPEG,
                 "png" => ImageType::PNG,
                 "magick" => ImageType::MAGICK,
@@ -388,7 +388,7 @@ fn parse_label_position(input: &str) -> IResult<&str, LabelPosition, VerboseErro
         value(LabelPosition::Top, tag("top")),
         value(LabelPosition::Bottom, tag("bottom")),
         map(nom::character::complete::i32, LabelPosition::Pixels),
-        map(parse_f32, |f| LabelPosition::Percentage(f)),
+        map(parse_f32, LabelPosition::Percentage),
     ))(input)
 }
 
@@ -456,7 +456,7 @@ fn parse_watermark_position(input: &str) -> IResult<&str, WatermarkPosition, Ver
         value(WatermarkPosition::Bottom, tag("bottom")),
         value(WatermarkPosition::Repeat, tag("repeat")),
         map(nom::character::complete::i32, WatermarkPosition::Pixels),
-        map(parse_f32, |f| WatermarkPosition::Percentage(f)),
+        map(parse_f32, WatermarkPosition::Percentage),
     ))(input)
 }
 

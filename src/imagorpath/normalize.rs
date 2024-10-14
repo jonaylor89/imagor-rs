@@ -73,16 +73,10 @@ where
 pub fn normalize(key: &str, safe_chars: &SafeCharsType) -> String {
     let cleaned = key
         .replace("\r\n", "")
-        .replace('\r', "")
-        .replace('\n', "")
-        .replace('\u{000B}', "")
-        .replace('\u{000C}', "")
-        .replace('\u{0085}', "")
-        .replace('\u{2028}', "")
-        .replace('\u{2029}', "");
+        .replace(['\r', '\n', '\u{000B}', '\u{000C}', '\u{0085}', '\u{2028}', '\u{2029}'], "");
 
     let cleaned = cleaned.trim_matches('/');
-    let path = Path::new(&cleaned).to_str().unwrap_or(&cleaned);
+    let path = Path::new(&cleaned).to_str().unwrap_or(cleaned);
 
     escape(path, |c| safe_chars.should_escape(c))
 }
