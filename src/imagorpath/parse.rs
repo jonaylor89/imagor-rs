@@ -192,7 +192,7 @@ fn parse_smart(input: &str) -> IResult<&str, bool, VerboseError<&str>> {
 
 fn take_until_unbalanced(input: &str) -> IResult<&str, &str, VerboseError<&str>> {
     let mut depth = 0;
-    let mut chars = input.char_indices().peekable();
+    let chars = input.char_indices().peekable();
 
     for (idx, ch) in chars {
         match ch {
@@ -285,7 +285,7 @@ fn parse_filter(input: &str) -> IResult<&str, Filter, VerboseError<&str>> {
         }
         "format" => {
             let image_type = match args.unwrap_or("").to_uppercase().as_str() {
-                "GIF" => ImageType::GIF,
+                "gif" => ImageType::GIF,
                 "jpeg" => ImageType::JPEG,
                 "png" => ImageType::PNG,
                 "magick" => ImageType::MAGICK,
