@@ -285,18 +285,18 @@ fn parse_filter(input: &str) -> IResult<&str, Filter, VerboseError<&str>> {
         }
         "format" => {
             let image_type = match args.unwrap_or("").to_uppercase().as_str() {
-                "gif" => ImageType::GIF,
-                "jpeg" => ImageType::JPEG,
-                "png" => ImageType::PNG,
-                "magick" => ImageType::MAGICK,
-                "pdf" => ImageType::PDF,
-                "svg" => ImageType::SVG,
-                "tiff" => ImageType::TIFF,
-                "webp" => ImageType::WEBP,
-                "heif" => ImageType::HEIF,
-                "bmp" => ImageType::BMP,
-                "avif" => ImageType::AVIF,
-                "jp2k" => ImageType::JP2K,
+                "GIF" => ImageType::GIF,
+                "JPEG" => ImageType::JPEG,
+                "PNG" => ImageType::PNG,
+                "MAGICK" => ImageType::MAGICK,
+                "PDF" => ImageType::PDF,
+                "SVG" => ImageType::SVG,
+                "TIFF" => ImageType::TIFF,
+                "WEBP" => ImageType::WEBP,
+                "HEIF" => ImageType::HEIF,
+                "BMP" => ImageType::BMP,
+                "AVIF" => ImageType::AVIF,
+                "JP2K" => ImageType::JP2K,
                 _ => {
                     return Err(nom::Err::Error(VerboseError {
                         errors: vec![(input, VerboseErrorKind::Context("Unknown image format"))],
