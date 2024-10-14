@@ -190,28 +190,6 @@ fn parse_smart(input: &str) -> IResult<&str, bool, VerboseError<&str>> {
     value(true, tag("smart/"))(input)
 }
 
-fn take_until_unbalanced(input: &str) -> IResult<&str, &str, VerboseError<&str>> {
-    let mut depth = 0;
-    let chars = input.char_indices().peekable();
-
-    for (idx, ch) in chars {
-        match ch {
-            '(' => depth += 1,
-            ')' => {
-                if depth == 0 {
-                    return Ok((&input[idx..], &input[..idx]));
-                }
-                depth -= 1;
-            }
-            _ => {}
-        }
-    }
-
-    Err(nom::Err::Error(VerboseError {
-        errors: vec![(input, VerboseErrorKind::Nom(ErrorKind::TakeUntil))],
-    }))
-}
-
 fn parse_color(input: &str) -> IResult<&str, Color, VerboseError<&str>> {
     alt((
         map(tag_no_case("auto"), |_| Color::Auto),

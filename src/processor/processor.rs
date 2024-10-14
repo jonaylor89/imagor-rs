@@ -51,10 +51,6 @@ pub struct FocalPoint {
     pub bottom: f32,
 }
 
-trait ImageLoader {
-    fn load(&self, blob: &[u8]) -> Result<VipsImage>;
-}
-
 #[derive(Error, Debug)]
 enum ProcessError {
     #[error("Image processing failed: {0}")]
@@ -75,7 +71,7 @@ impl Processor {
     }
 
     #[tracing::instrument(skip(self))]
-    pub fn process<L: ImageLoader>(&self, blob: &Blob, params: &Params) -> Result<()> {
+    pub fn process(&self, blob: &Blob, params: &Params) -> Result<()> {
         let processing_params = self.preprocess(blob, params);
         let img = self.load_image(blob, params, &processing_params)?;
         let img = apply_orientation(img, processing_params.orient)?;
