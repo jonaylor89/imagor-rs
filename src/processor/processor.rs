@@ -228,7 +228,7 @@ impl Processor {
             && params.crop_left.is_none()
             && params.crop_right.is_none()
         {
-            match (params.fit, params.width, params.height) {
+            return match (params.fit, params.width, params.height) {
                 (Some(Fit::FitIn), Some(width), Some(height)) => {
                     let w = width.max(1);
                     let h = height.max(1);
@@ -237,7 +237,7 @@ impl Processor {
                     } else {
                         Size::Down
                     };
-                    return ops::thumbnail_buffer_with_opts(
+                    ops::thumbnail_buffer_with_opts(
                         blob.as_ref(),
                         w,
                         &ThumbnailBufferOptions {
@@ -250,7 +250,7 @@ impl Processor {
                         ProcessError::ImageProcessingError(
                             "Failed to create thumbnail for fit_in".into(),
                         )
-                    });
+                    })
                 }
                 (Some(Fit::Stretch), Some(width), Some(height)) => ops::thumbnail_buffer_with_opts(
                     blob.as_ref(),
@@ -267,6 +267,7 @@ impl Processor {
                         "Failed to create thumbnail for stretch".into(),
                     )
                 }),
+
                 (None, Some(width), Some(height)) => {
                     let interest = match (params.v_align, params.h_align) {
                         _ if params.smart => Interesting::Attention,
@@ -280,7 +281,7 @@ impl Processor {
                         _ => Interesting::None,
                     };
 
-                    return ops::thumbnail_buffer_with_opts(
+                    ops::thumbnail_buffer_with_opts(
                         blob.as_ref(),
                         width,
                         &ThumbnailBufferOptions {
@@ -294,7 +295,7 @@ impl Processor {
                         ProcessError::ImageProcessingError(
                             "Failed to create smart/aligned thumbnail".into(),
                         )
-                    });
+                    })
                 }
                 (None, Some(width), None) => ops::thumbnail_buffer_with_opts(
                     blob.as_ref(),
@@ -311,6 +312,7 @@ impl Processor {
                         "Failed to create width-only thumbnail".into(),
                     )
                 }),
+
                 (None, None, Some(height)) => ops::thumbnail_buffer_with_opts(
                     blob.as_ref(),
                     self.max_width,
@@ -326,10 +328,11 @@ impl Processor {
                         "Failed to create height-only thumbnail".into(),
                     )
                 }),
+
                 _ => VipsImage::new_from_buffer(blob.as_ref(), "")
                     .map_err(|_| ProcessError::ImageLoadError),
             };
-        }
+        };
 
         // If we couldn't create a thumbnail, load the full image
         if processing_params.thumbnail_not_supported {

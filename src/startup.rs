@@ -1,11 +1,11 @@
 use crate::imagorpath::{normalize::SafeCharsType, params::Params};
-use crate::metrics::setup_metrics_recorder;
+use crate::metrics::{setup_metrics_recorder, track_metrics};
 use crate::state::AppStateDyn;
 use crate::storage::file::FileStorage;
 use axum::extract::{MatchedPath, Request, State};
 use axum::http::StatusCode;
 use axum::routing::get;
-use axum::Json;
+use axum::{middleware, Json};
 use axum::{serve::Serve, Router};
 use color_eyre::eyre::WrapErr;
 use color_eyre::Result;
@@ -74,6 +74,7 @@ async fn run(listener: TcpListener) -> Result<Serve<Router, Router>> {
                 )
             }),
         )
+        .route_layer(middleware::from_fn(track_metrics))
         .with_state(state);
 
     tracing::debug!("listening on {}", listener.local_addr().unwrap());

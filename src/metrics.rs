@@ -21,7 +21,7 @@ pub fn setup_metrics_recorder() -> PrometheusHandle {
         .unwrap()
 }
 
-async fn track_metrics(req: Request, next: Next) -> impl IntoResponse {
+pub async fn track_metrics(req: Request, next: Next) -> impl IntoResponse {
     let start = Instant::now();
     let path = if let Some(matched_path) = req.extensions().get::<MatchedPath>() {
         matched_path.as_str().to_owned()
