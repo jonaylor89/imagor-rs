@@ -1,4 +1,4 @@
-use super::params::{HAlign, Params, TrimBy, VAlign, F32};
+use super::params::{Fit, HAlign, Params, TrimBy, VAlign, F32};
 use core::fmt;
 use url::form_urlencoded;
 
@@ -14,8 +14,7 @@ pub fn generate_path(p: &Params) -> String {
         generate_meta(p),
         generate_trim(p),
         generate_crop(p),
-        generate_fit_in(p),
-        generate_stretch(p),
+        generate_fit(p),
         generate_size_and_flip(p),
         generate_padding(p),
         generate_valign(p),
@@ -78,19 +77,11 @@ fn generate_crop(p: &Params) -> Option<String> {
     }
 }
 
-fn generate_fit_in(p: &Params) -> Option<String> {
-    if p.fit_in {
-        Some("fit-in".to_string())
-    } else {
-        None
-    }
-}
-
-fn generate_stretch(p: &Params) -> Option<String> {
-    if p.stretch {
-        Some("stretch".to_string())
-    } else {
-        None
+fn generate_fit(p: &Params) -> Option<String> {
+    match p.fit {
+        Some(Fit::FitIn) => Some("fit-in".to_string()),
+        Some(Fit::Stretch) => Some("fill".to_string()),
+        _ => None,
     }
 }
 

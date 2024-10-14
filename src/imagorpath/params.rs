@@ -71,6 +71,12 @@ impl FromStr for VAlign {
 #[derive(Serialize, Deserialize, Debug, Copy, Clone)]
 pub struct F32(pub f32);
 
+impl fmt::Display for F32 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 // Implement PartialEq to override NaN behavior
 impl PartialEq for F32 {
     fn eq(&self, other: &Self) -> bool {
@@ -127,8 +133,8 @@ pub struct Params {
     pub crop_right: Option<F32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub crop_bottom: Option<F32>,
-    pub fit_in: bool,
-    pub stretch: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fit: Option<Fit>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub width: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -158,7 +164,7 @@ pub enum Filter {
     Brightness(i32),
     Contrast(i32),
     Fill(Color),
-    Focal(String),
+    Focal(FocalParams),
     Format(ImageType),
     Grayscale,
     Hue(i32),
@@ -273,6 +279,12 @@ impl std::fmt::Display for ImageType {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Fit {
+    FitIn,
+    Stretch,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct LabelParams {
     pub text: String,
@@ -325,7 +337,7 @@ impl fmt::Display for Color {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub enum FocalPoint {
+pub enum FocalParams {
     Region {
         top_left: (F32, F32),
         bottom_right: (F32, F32),
@@ -333,15 +345,22 @@ pub enum FocalPoint {
     Point(F32, F32),
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub enum ImageFormat {
-    Jpeg,
-    Png,
-    Gif,
-    WebP,
-    Tiff,
-    Avif,
-    Jp2,
+impl fmt::Display for FocalParams {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FocalParams::Region {
+                top_left,
+                bottom_right,
+            } => {
+                write!(
+                    f,
+                    "{}x{}:{}x{}",
+                    top_left.0, top_left.1, bottom_right.0, bottom_right.1
+                )
+            }
+            FocalParams::Point(x, y) => write!(f, "{}x{}", x, y),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]

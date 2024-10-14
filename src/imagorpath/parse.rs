@@ -1,6 +1,6 @@
 use super::params::{
-    Color, Filter, HAlign, ImageType, LabelParams, LabelPosition, Params, RoundedCornerParams,
-    TrimBy, VAlign, WatermarkParams, WatermarkPosition, F32,
+    Color, Filter, Fit, FocalParams, HAlign, ImageType, LabelParams, LabelPosition, Params,
+    RoundedCornerParams, TrimBy, VAlign, WatermarkParams, WatermarkPosition, F32,
 };
 use axum::{
     async_trait,
@@ -146,8 +146,21 @@ fn parse_dimensions(
     })
 }
 
-fn parse_fit_in(input: &str) -> IResult<&str, bool, VerboseError<&str>> {
-    value(true, tag("fit-in/"))(input)
+fn parse_fit(input: &str) -> IResult<&str, Option<Fit>, VerboseError<&str>> {
+    let (input, fit) = opt(alt((
+        value(Fit::FitIn, tag("fit-in/")),
+        value(Fit::Stretch, tag("stretch/")),
+    )))(input)?;
+
+    // Check if both fit-in and stretch are present
+    let (input, both_present) = opt(pair(tag("fit-in/"), tag("stretch/")))(input)?;
+
+    match (fit, both_present) {
+        (Some(_), Some(_)) => Ok((input, Some(Fit::FitIn))), // Default to FitIn if both are present
+        (Some(f), None) => Ok((input, Some(f))),
+        (None, Some(_)) => Ok((input, Some(Fit::FitIn))), // Default to FitIn if both are present
+        (None, None) => Ok((input, None)),
+    }
 }
 
 fn parse_alignment(
@@ -225,6 +238,31 @@ fn parse_color(input: &str) -> IResult<&str, Color, VerboseError<&str>> {
     ))(input)
 }
 
+fn parse_focal_point(input: &str) -> IResult<&str, FocalParams, VerboseError<&str>> {
+    alt((
+        // Parse Region
+        map(
+            tuple((
+                parse_f32,
+                char('x'),
+                parse_f32,
+                char(':'),
+                parse_f32,
+                char('x'),
+                parse_f32,
+            )),
+            |(left, _, top, _, right, _, bottom)| FocalParams::Region {
+                top_left: (left, top),
+                bottom_right: (right, bottom),
+            },
+        ),
+        // Parse Point
+        map(tuple((parse_f32, char('x'), parse_f32)), |(x, _, y)| {
+            FocalParams::Point(x, y)
+        }),
+    ))(input)
+}
+
 fn parse_filter(input: &str) -> IResult<&str, Filter, VerboseError<&str>> {
     let (input, name) = take_while1(|c: char| c.is_alphanumeric() || c == '_')(input)?;
     let (input, args) = opt(delimited(char('('), take_while1(|c| c != ')'), char(')')))(input)?;
@@ -241,7 +279,10 @@ fn parse_filter(input: &str) -> IResult<&str, Filter, VerboseError<&str>> {
             let (_, color) = parse_color(args.unwrap_or(""))?;
             Ok((input, Filter::Fill(color)))
         }
-        "focal" => Ok((input, Filter::Focal(args.unwrap_or("").to_string()))),
+        "focal" => {
+            let (_, focal_point) = parse_focal_point(args.unwrap_or(""))?;
+            Ok((input, Filter::Focal(focal_point)))
+        }
         "format" => {
             let image_type = match args.unwrap_or("").to_uppercase().as_str() {
                 "gif" => ImageType::GIF,
@@ -442,7 +483,7 @@ pub fn parse_path(input: &str) -> IResult<&str, Params, VerboseError<&str>> {
                 context("parse_meta", opt(parse_meta)),
                 context("parse_trim", opt(parse_trim)),
                 context("parse_crop", opt(parse_crop)),
-                context("parse_fit_in", opt(parse_fit_in)),
+                context("parse_fit", opt(parse_fit)),
                 context("parse_dimensions", opt(parse_dimensions)),
                 context("parse_alignment", opt(parse_alignment)),
                 context("parse_smart", opt(parse_smart)),
@@ -455,7 +496,7 @@ pub fn parse_path(input: &str) -> IResult<&str, Params, VerboseError<&str>> {
                 meta,
                 trim_details,
                 crop,
-                fit_in,
+                fit,
                 dimensions,
                 alignment,
                 smart,
@@ -489,7 +530,7 @@ pub fn parse_path(input: &str) -> IResult<&str, Params, VerboseError<&str>> {
                         .as_ref()
                         .and_then(|(_, v_align)| v_align.to_owned()),
                     smart: smart.unwrap_or_default(),
-                    fit_in: fit_in.unwrap_or_default(),
+                    fit: fit.unwrap_or_default(),
                     filters: filters.unwrap_or_default(),
                     ..Default::default()
                 }
@@ -502,7 +543,7 @@ pub fn parse_path(input: &str) -> IResult<&str, Params, VerboseError<&str>> {
 mod tests {
 
     use super::*;
-    use crate::imagorpath::params::{HAlign, TrimBy, VAlign};
+    use crate::imagorpath::params::{Fit, HAlign, TrimBy, VAlign};
     use nom::error::convert_error;
     use pretty_assertions::assert_eq;
 
@@ -529,7 +570,7 @@ mod tests {
             h_align: Some(HAlign::Left),
             v_align: Some(VAlign::Top),
             smart: true,
-            fit_in: true,
+            fit: Some(Fit::FitIn),
             filters: vec![Filter::Grayscale],
             ..Default::default()
         };
@@ -607,7 +648,7 @@ mod tests {
             h_align: Some(HAlign::Left),
             v_align: Some(VAlign::Top),
             smart: true,
-            fit_in: true,
+            fit: Some(Fit::FitIn),
             filters: vec![
                 Filter::Grayscale,
             ],
