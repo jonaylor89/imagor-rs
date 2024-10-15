@@ -243,6 +243,8 @@ fn parse_focal_point(input: &str) -> IResult<&str, FocalParams, VerboseError<&st
 
 fn parse_filter(input: &str) -> IResult<&str, Filter, VerboseError<&str>> {
     let (input, name) = take_while1(|c: char| c.is_alphanumeric() || c == '_')(input)?;
+
+    // Should be "take_while_unbalanceed()"
     let (input, args) = opt(delimited(char('('), take_while1(|c| c != ')'), char(')')))(input)?;
 
     match name.to_lowercase().as_str() {

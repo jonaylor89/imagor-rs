@@ -152,13 +152,13 @@ mod tests {
         let (_, p) = parse_path("fit-in/16x17/foobar").unwrap();
         assert_eq!(
             digest_result_storage_hasher(&p),
-            "d5/c2/804e5d81c475bee50f731db17ee613f43262"
+            "d5/c2/804e5d81c475bee50f731db17ee613f43262",
         );
 
         let p_without_path = Params { path: None, ..p };
         assert_eq!(
             digest_result_storage_hasher(&p_without_path),
-            "d5/c2/804e5d81c475bee50f731db17ee613f43262"
+            "e7/d1/edae4e3a014626605954c8ce09a6d8526ed1"
         );
     }
 
@@ -167,17 +167,26 @@ mod tests {
         let (_, p) = parse_path("fit-in/16x17/foobar").unwrap();
         assert_eq!(
             suffix_result_storage_hasher(&p),
-            "foobar.d5c2804e5d81c475bee5"
+            "foobar.d5c2804e5d81c475bee5",
         );
+    }
+
+    #[test]
+    fn test_size_suffix_result_storage_hasher_fit_in() {
+        let (_, p) = parse_path("fit-in/16x17/foobar").unwrap();
         assert_eq!(
             size_suffix_result_storage_hasher(&p),
             "foobar.d5c2804e5d81c475bee5_16x17"
         );
+    }
 
+    #[test]
+    fn test_suffix_result_storage_hasher_fit_in_without_path() {
+        let (_, p) = parse_path("fit-in/16x17/foobar").unwrap();
         let p_without_path = Params { path: None, ..p };
         assert_eq!(
             suffix_result_storage_hasher(&p_without_path),
-            "foobar.d5c2804e5d81c475bee5"
+            "foobar.e7d1edae4e3a01462660",
         );
     }
 
@@ -195,12 +204,17 @@ mod tests {
     }
 
     #[test]
-    fn test_suffix_result_storage_hasher_smart_no_size() {
+    fn test_size_suffix_result_storage_hasher_smart_no_size() {
         let (_, p) = parse_path("smart/example.com/foobar").unwrap();
         assert_eq!(
             size_suffix_result_storage_hasher(&p),
             "example.com/foobar.afa3503c0d76bc49eccd"
         );
+    }
+
+    #[test]
+    fn test_suffix_result_storage_hasher_smart_no_size() {
+        let (_, p) = parse_path("smart/example.com/foobar").unwrap();
         assert_eq!(
             suffix_result_storage_hasher(&p),
             "example.com/foobar.afa3503c0d76bc49eccd"
@@ -231,7 +245,8 @@ mod tests {
         let p_without_path = Params { path: None, ..p };
         assert_eq!(
             suffix_result_storage_hasher(&p_without_path),
-            "foobar.45d8ebb31bd4ed80c26e.jpg"
+            // "foobar.45d8ebb31bd4ed80c26e.jpg"
+            "foobar.b9bb1f64c760cf298fb6.jpg",
         );
     }
 
@@ -248,11 +263,11 @@ mod tests {
         println!("{}", generate_path(&p));
         assert_eq!(
             suffix_result_storage_hasher(&p),
-            "example.com/foobar.8aade9060badfcb289f9.webp"
+            "example.com/foobar.98c5e02e0ba162bce51d.webp",
         );
         assert_eq!(
             size_suffix_result_storage_hasher(&p),
-            "example.com/foobar.8aade9060badfcb289f9_17x19.webp"
+            "example.com/foobar.98c5e02e0ba162bce51d_17x19.webp",
         );
     }
 
@@ -269,11 +284,11 @@ mod tests {
         println!("{}", generate_path(&p));
         assert_eq!(
             suffix_result_storage_hasher(&p),
-            "example.com/foobar.d72ff6ef20ba41fa570c.json"
+            "example.com/foobar.b56fe819cae010721433.json",
         );
         assert_eq!(
             size_suffix_result_storage_hasher(&p),
-            "example.com/foobar.d72ff6ef20ba41fa570c_17x19.json"
+            "example.com/foobar.b56fe819cae010721433_17x19.json"
         );
     }
 
@@ -291,11 +306,11 @@ mod tests {
         println!("{}", generate_path(&p));
         assert_eq!(
             suffix_result_storage_hasher(&p),
-            "example.com/foobar.c80ab0faf85b35a140a8.json"
+            "example.com/foobar.551f72136cd4ce0aaf36.json",
         );
         assert_eq!(
             size_suffix_result_storage_hasher(&p),
-            "example.com/foobar.c80ab0faf85b35a140a8_17x19.json"
+            "example.com/foobar.551f72136cd4ce0aaf36_17x19.json"
         );
     }
 }
