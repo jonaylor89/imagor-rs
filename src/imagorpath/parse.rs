@@ -241,30 +241,67 @@ fn parse_focal_point(input: &str) -> IResult<&str, FocalParams, VerboseError<&st
     ))(input)
 }
 
+fn take_until_unbalanced(input: &str) -> IResult<&str, &str, VerboseError<&str>> {
+    let mut depth = 0;
+    let mut chars = input.char_indices().peekable();
+
+    // Skip the first opening parenthesis
+    if let Some((_, '(')) = chars.next() {
+        let start_idx = 1;
+        while let Some((idx, ch)) = chars.next() {
+            match ch {
+                '(' => depth += 1,
+                ')' => {
+                    if depth == 0 {
+                        let new_input = &input[idx + 1..];
+                        let args = &input[start_idx..idx];
+
+                        return Ok((new_input, args));
+                    }
+
+                    depth -= 1;
+                }
+                _ => {}
+            }
+        }
+    }
+
+    Err(nom::Err::Error(VerboseError {
+        errors: vec![(input, VerboseErrorKind::Nom(ErrorKind::TakeUntil))],
+    }))
+}
+
 fn parse_filter(input: &str) -> IResult<&str, Filter, VerboseError<&str>> {
     let (input, name) = take_while1(|c: char| c.is_alphanumeric() || c == '_')(input)?;
+    let (input, args) = take_until_unbalanced(input)?;
 
-    // Should be "take_while_unbalanceed()"
-    let (input, args) = opt(delimited(char('('), take_while1(|c| c != ')'), char(')')))(input)?;
-
-    match name.to_lowercase().as_str() {
+    let (remaining_input, filter) = match name.to_lowercase().as_str() {
         "backgroundcolor" => {
-            let (_, color) = parse_color(args.unwrap_or(""))?;
-            Ok((input, Filter::BackgroundColor(color)))
+            let (_, color) = parse_color(args)?;
+            (input, Filter::BackgroundColor(color))
         }
-        "blur" => map(parse_f32, Filter::Blur)(args.unwrap_or("")),
-        "brightness" => map(nom::character::complete::i32, Filter::Brightness)(args.unwrap_or("")),
-        "contrast" => map(nom::character::complete::i32, Filter::Contrast)(args.unwrap_or("")),
+        "blur" => {
+            let (_, blur) = map(parse_f32, Filter::Blur)(args)?;
+            (input, blur)
+        }
+        "brightness" => {
+            let (_, brightness) = map(nom::character::complete::i32, Filter::Brightness)(args)?;
+            (input, brightness)
+        }
+        "contrast" => {
+            let (_, contrast) = map(nom::character::complete::i32, Filter::Contrast)(args)?;
+            (input, contrast)
+        }
         "fill" => {
-            let (_, color) = parse_color(args.unwrap_or(""))?;
-            Ok((input, Filter::Fill(color)))
+            let (_, color) = parse_color(args)?;
+            (input, Filter::Fill(color))
         }
         "focal" => {
-            let (_, focal_point) = parse_focal_point(args.unwrap_or(""))?;
-            Ok((input, Filter::Focal(focal_point)))
+            let (_, focal_point) = parse_focal_point(args)?;
+            (input, Filter::Focal(focal_point))
         }
         "format" => {
-            let image_type = match args.unwrap_or("").to_uppercase().as_str() {
+            let image_type = match args.to_uppercase().as_str() {
                 "GIF" => ImageType::GIF,
                 "JPEG" => ImageType::JPEG,
                 "PNG" => ImageType::PNG,
@@ -283,38 +320,85 @@ fn parse_filter(input: &str) -> IResult<&str, Filter, VerboseError<&str>> {
                     }))
                 }
             };
-            Ok((input, Filter::Format(image_type)))
+            (input, Filter::Format(image_type))
         }
-        "grayscale" => Ok((input, Filter::Grayscale)),
-        "hue" => map(nom::character::complete::i32, Filter::Hue)(args.unwrap_or("")),
-        "label" => map(parse_label_params, Filter::Label)(args.unwrap_or("")),
-        "maxbytes" => map(nom::character::complete::u64, |v| {
-            Filter::MaxBytes(v as usize)
-        })(args.unwrap_or("")),
-        "maxframes" => map(nom::character::complete::u64, |v| {
-            Filter::MaxFrames(v as usize)
-        })(args.unwrap_or("")),
-        "orient" => map(nom::character::complete::i32, Filter::Orient)(args.unwrap_or("")),
+        "grayscale" => (input, Filter::Grayscale),
+        "hue" => {
+            let (_, hue) = map(nom::character::complete::i32, Filter::Hue)(args)?;
+            (input, hue)
+        }
+        "label" => {
+            let (_, label) = map(parse_label_params, Filter::Label)(args)?;
+            (input, label)
+        }
+        "maxbytes" => {
+            let (_, max_bytes) = map(nom::character::complete::u64, |v| {
+                Filter::MaxBytes(v as usize)
+            })(args)?;
+            (input, max_bytes)
+        }
+        "maxframes" => {
+            let (_, max_frames) = map(nom::character::complete::u64, |v| {
+                Filter::MaxFrames(v as usize)
+            })(args)?;
+            (input, max_frames)
+        }
+        "orient" => {
+            let (_, orient) = map(nom::character::complete::i32, Filter::Orient)(args)?;
+            (input, orient)
+        }
         "page" => {
-            map(nom::character::complete::u64, |v| Filter::Page(v as usize))(args.unwrap_or(""))
+            let (_, page) = map(nom::character::complete::u64, |v| Filter::Page(v as usize))(args)?;
+            (input, page)
         }
-        "dpi" => map(nom::character::complete::u32, Filter::Dpi)(args.unwrap_or("")),
-        "proportion" => map(parse_f32, Filter::Proportion)(args.unwrap_or("")),
-        "quality" => map(nom::character::complete::u8, Filter::Quality)(args.unwrap_or("")),
-        "rgb" => map(parse_rgb, |(r, g, b)| Filter::Rgb(r, g, b))(args.unwrap_or("")),
-        "rotate" => map(nom::character::complete::i32, Filter::Rotate)(args.unwrap_or("")),
-        "roundcorner" => map(parse_rounded_corner_params, Filter::RoundCorner)(args.unwrap_or("")),
-        "saturation" => map(nom::character::complete::i32, Filter::Saturation)(args.unwrap_or("")),
-        "sharpen" => map(parse_f32, Filter::Sharpen)(args.unwrap_or("")),
-        "stripexif" => Ok((input, Filter::StripExif)),
-        "stripicc" => Ok((input, Filter::StripIcc)),
-        "stripmetadata" => Ok((input, Filter::StripMetadata)),
-        "upscale" => Ok((input, Filter::Upscale)),
-        "watermark" => map(parse_watermark_params, Filter::Watermark)(args.unwrap_or("")),
-        _ => Err(nom::Err::Error(VerboseError {
-            errors: vec![(input, VerboseErrorKind::Context("Unknown filter"))],
-        })),
-    }
+        "dpi" => {
+            let (_, dpi) = map(nom::character::complete::u32, Filter::Dpi)(args)?;
+            (input, dpi)
+        }
+        "proportion" => {
+            let (_, proportion) = map(parse_f32, Filter::Proportion)(args)?;
+            (input, proportion)
+        }
+        "quality" => {
+            let (_, quality) = map(nom::character::complete::u8, Filter::Quality)(args)?;
+            (input, quality)
+        }
+        "rgb" => {
+            let (_, rgb) = map(parse_rgb, |(r, g, b)| Filter::Rgb(r, g, b))(args)?;
+            (input, rgb)
+        }
+        "rotate" => {
+            let (_, rotate) = map(nom::character::complete::i32, Filter::Rotate)(args)?;
+            (input, rotate)
+        }
+        "roundcorner" => {
+            let (_, round_corner) = map(parse_rounded_corner_params, Filter::RoundCorner)(args)?;
+            (input, round_corner)
+        }
+        "saturation" => {
+            let (_, saturation) = map(nom::character::complete::i32, Filter::Saturation)(args)?;
+            (input, saturation)
+        }
+        "sharpen" => {
+            let (_, sharpen) = map(parse_f32, Filter::Sharpen)(args)?;
+            (input, sharpen)
+        }
+        "stripexif" => (input, Filter::StripExif),
+        "stripicc" => (input, Filter::StripIcc),
+        "stripmetadata" => (input, Filter::StripMetadata),
+        "upscale" => (input, Filter::Upscale),
+        "watermark" => {
+            let (_, watermark) = map(parse_watermark_params, Filter::Watermark)(args)?;
+            (input, watermark)
+        }
+        _ => {
+            return Err(nom::Err::Error(VerboseError {
+                errors: vec![(input, VerboseErrorKind::Context("Unknown filter"))],
+            }))
+        }
+    };
+
+    Ok((remaining_input, filter))
 }
 
 fn parse_filters(input: &str) -> IResult<&str, Vec<Filter>, VerboseError<&str>> {
