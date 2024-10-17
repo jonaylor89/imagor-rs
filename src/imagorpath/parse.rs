@@ -15,7 +15,7 @@ use nom::{
     combinator::{map, opt, recognize, value},
     error::{context, ErrorKind, VerboseError, VerboseErrorKind},
     multi::{many1, separated_list0, separated_list1},
-    sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
+    sequence::{pair, preceded, separated_pair, terminated, tuple},
     AsChar, IResult,
 };
 use tracing::info;
@@ -455,26 +455,6 @@ fn parse_label_position(input: &str) -> IResult<&str, LabelPosition, VerboseErro
         map(parse_f32, LabelPosition::Percentage),
     ))(input)
 }
-
-// fn parse_color(input: &str) -> IResult<&str, Color, VerboseError<&str>> {
-//     alt((
-//         map(
-//             preceded(tag("rgb("), terminated(parse_rgb, char(')'))),
-//             |(r, g, b)| Color::Rgb(r as u8, g as u8, b as u8),
-//         ),
-//         map(
-//             preceded(tag("#"), take_while1(|c: char| c.is_ascii_hexdigit())),
-//             |hex: &str| Color::Hex(hex.to_string()),
-//         ),
-//         value(Color::Auto, tag("auto")),
-//         value(Color::Blur, tag("blur")),
-//         value(Color::None, tag("none")),
-//         map(
-//             take_while1(|c: char| c.is_alphanumeric() || c == '_'),
-//             |name: &str| Color::Named(name.to_string()),
-//         ),
-//     ))(input)
-// }
 
 fn parse_rounded_corner_params(
     input: &str,

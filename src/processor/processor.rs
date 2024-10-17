@@ -85,9 +85,10 @@ impl Processor {
             params,
         )?;
 
-        let _img = apply_flip(img, params.h_flip, params.v_flip)?;
+        let img = apply_flip(img, params.h_flip, params.v_flip)?;
 
         // TODO: Apply filters
+        let filted_img = apply_filters(img, params, processing_params);
 
         // let export_ready = self.export(&processed_image, _params)?;
 
@@ -348,6 +349,27 @@ impl Processor {
                 ProcessError::ImageProcessingError("Failed to create default thumbnail".into())
             })
         }
+    }
+
+    #[tracing::instrument(skip(self))]
+    fn apply_filters(
+        &self,
+        img: VipsImage,
+        params: &Params,
+        processing_params: &ProcessingParams,
+    ) -> Result<VipsImage, ProcessError> {
+        let filtered = params.filters.iter().fold(img, |img, filter| match filter {
+            // do this for all filters
+            // Filter::Blur(blur) => ops::blur(&img, blur.sigma).unwrap_or(img),
+            // Filter::Sharpen(sharpen) => ops::sharpen(&img, sharpen.sigma).unwrap_or(img),
+            // Filter::Focal(focal) => ops::focal(&img, focal.sigma).unwrap_or(img),
+            // Filter::Rotate(rotate) => ops::rotate(&img, rotate.angle.into_f64()).unwrap_or(img),
+            // Filter::StripExif => img.remove("exif-data"),
+            // Filter::StripMetadata => img.remove("icc-profile-data"),
+            // Filter::AutoOrient => img,
+        });
+
+        Ok(filtered)
     }
 }
 

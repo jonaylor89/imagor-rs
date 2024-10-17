@@ -9,10 +9,10 @@ imagor but in rust (mostly for self-learning purposes)
 - [x] route parser
 - [x] add auth+hashing to imagorpath
 - [x] storage backend / load images
-- [_] process images (with vips)
-- [_] serve processed images
-- [_] enforce auth on main route
-- [_] add cache
-- [_] add config
+- [ ] process images (with vips)
+- [ ] serve processed images
+- [ ] enforce auth on main route
+- [ ] add cache
+- [ ] add config
 - [x] prom metrics
-- [_] add tests?
+- [ ] add tests?
