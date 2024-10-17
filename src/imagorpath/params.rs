@@ -1,4 +1,5 @@
 use core::fmt;
+use libvips::VipsImage;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use thiserror::Error;
@@ -186,6 +187,14 @@ pub enum Filter {
     StripMetadata,
     Upscale,
     Watermark(WatermarkParams),
+}
+
+impl Filter {
+    pub fn apply(&self, img: &VipsImage) -> VipsImage {
+        match self {
+           // Apply the filter to the image
+       }
+    }
 }
 
 impl std::fmt::Display for Filter {

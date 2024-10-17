@@ -358,15 +358,10 @@ impl Processor {
         params: &Params,
         processing_params: &ProcessingParams,
     ) -> Result<VipsImage, ProcessError> {
-        let filtered = params.filters.iter().fold(img, |img, filter| match filter {
-            // do this for all filters
-            // Filter::Blur(blur) => ops::blur(&img, blur.sigma).unwrap_or(img),
-            // Filter::Sharpen(sharpen) => ops::sharpen(&img, sharpen.sigma).unwrap_or(img),
-            // Filter::Focal(focal) => ops::focal(&img, focal.sigma).unwrap_or(img),
-            // Filter::Rotate(rotate) => ops::rotate(&img, rotate.angle.into_f64()).unwrap_or(img),
-            // Filter::StripExif => img.remove("exif-data"),
-            // Filter::StripMetadata => img.remove("icc-profile-data"),
-            // Filter::AutoOrient => img,
+        let filtered = params.filters.iter().fold(img, |img, filter| {
+            let new_image = filter.apply(&img);
+
+            new_image
         });
 
         Ok(filtered)
