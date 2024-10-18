@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use crate::{
     imagorpath::params::{Color, Filter, Fit, HAlign, ImageType, Params, VAlign},
     storage::storage::Blob,
@@ -9,11 +11,12 @@ use libvips::{
 };
 use metrics::IntoF64;
 use thiserror::Error;
+use tracing::debug;
 
 pub struct Processor {
     disable_blur: bool,
     disable_filters: Vec<Filter>,
-    max_filter_ops: i32,
+    max_filter_ops: usize,
     concurrency: i32,
     max_cache_files: i32,
     max_cache_mem: i32,
@@ -88,7 +91,7 @@ impl Processor {
         let img = apply_flip(img, params.h_flip, params.v_flip)?;
 
         // TODO: Apply filters
-        let filted_img = apply_filters(img, params, processing_params);
+        let filted_img = self.apply_filters(img, params, &processing_params);
 
         // let export_ready = self.export(&processed_image, _params)?;
 
@@ -358,8 +361,27 @@ impl Processor {
         params: &Params,
         processing_params: &ProcessingParams,
     ) -> Result<VipsImage, ProcessError> {
-        let filtered = params.filters.iter().fold(img, |img, filter| {
+        let truncate_length = if self.max_filter_ops > 0 {
+            self.max_filter_ops.min(params.filters.len())
+        } else {
+            params.filters.len()
+        };
+
+        if truncate_length < params.filters.len() {
+            debug!("max-filter-ops-exceeded |{}|", params.filters.len());
+        }
+        let filters_slice: &[Filter] = &params.filters[..truncate_length];
+
+        let filtered = filters_slice.iter().fold(img, |img, filter| {
+            if self.disable_filters.contains(filter) {
+                return img;
+            }
+
+            let start = Instant::now();
             let new_image = filter.apply(&img);
+            let elapsed = start.elapsed().as_millis();
+
+            debug!("filter |{}| took {}", filter, elapsed);
 
             new_image
         });

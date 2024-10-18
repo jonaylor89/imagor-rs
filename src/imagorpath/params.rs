@@ -190,6 +190,7 @@ pub enum Filter {
 }
 
 impl Filter {
+    #[tracing::instrument(skip(img))]
     pub fn apply(&self, img: &VipsImage) -> VipsImage {
         match self {
            // Apply the filter to the image
