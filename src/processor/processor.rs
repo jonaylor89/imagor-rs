@@ -3,7 +3,8 @@ use std::time::Instant;
 use crate::{
     imagorpath::{
         color::Color,
-        params::{Filter, Fit, HAlign, ImageType, Params, VAlign},
+        filter::{Filter, ImageType},
+        params::{Fit, HAlign, Params, VAlign},
     },
     storage::storage::Blob,
 };
@@ -14,7 +15,7 @@ use libvips::{
 };
 use metrics::IntoF64;
 use thiserror::Error;
-use tracing::debug;
+use tracing::{debug, error};
 
 pub struct Processor {
     disable_blur: bool,
@@ -94,7 +95,7 @@ impl Processor {
         let img = apply_flip(img, params.h_flip, params.v_flip)?;
 
         // TODO: Apply filters
-        let filted_img = self.apply_filters(img, params, &processing_params);
+        let _filted_img = self.apply_filters(img, params, &processing_params);
 
         // let export_ready = self.export(&processed_image, _params)?;
 
@@ -386,7 +387,13 @@ impl Processor {
 
             debug!("filter |{}| took {}", filter, elapsed);
 
-            new_image
+            match new_image {
+                Ok(new_image) => new_image,
+                Err(err) => {
+                    error!("filter |{}| failed: {:?}", filter, err);
+                    img
+                }
+            }
         });
 
         Ok(filtered)

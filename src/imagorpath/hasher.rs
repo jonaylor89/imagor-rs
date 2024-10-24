@@ -1,6 +1,5 @@
-use crate::imagorpath::params::Filter;
-
 use super::{generate::generate_path, params};
+use crate::imagorpath::filter::Filter;
 use argon2::{
     password_hash::SaltString, Algorithm, Argon2, Params, PasswordHash, PasswordHasher,
     PasswordVerifier, Version,
@@ -142,10 +141,12 @@ pub fn compute_hash(path: String) -> Result<SecretString> {
 
 #[cfg(test)]
 mod tests {
-    use params::{Filter, ImageType};
-
     use super::*;
-    use crate::imagorpath::{params::Params, parse::parse_path};
+    use crate::imagorpath::{
+        filter::{Filter, ImageType},
+        params::Params,
+        parse::parse_path,
+    };
 
     #[test]
     fn test_digest_result_storage_hasher() {

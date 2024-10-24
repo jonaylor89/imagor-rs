@@ -1,3 +1,5 @@
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 
 macro_rules! define_colors {
@@ -39,6 +41,7 @@ pub enum Color {
     Rgb(u8, u8, u8),
     Auto,
     Blur,
+    None,
 }
 
 impl Color {

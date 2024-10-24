@@ -1,13 +1,17 @@
-use super::params::{
-    Color, Filter, Fit, FocalParams, HAlign, ImageType, LabelParams, LabelPosition, Params,
-    RoundedCornerParams, TrimBy, VAlign, WatermarkParams, WatermarkPosition, F32,
+use super::color::{Color, NamedColor};
+use super::filter::{
+    Filter, FocalParams, ImageType, LabelParams, LabelPosition, RoundedCornerParams,
+    WatermarkParams, WatermarkPosition,
 };
+use super::params::{Fit, HAlign, Params, TrimBy, VAlign};
+use super::type_utils::F32;
 use axum::{
     async_trait,
     extract::FromRequestParts,
     http::{request::Parts, StatusCode},
 };
 use color_eyre::Result;
+use nom::error::{make_error, ParseError};
 use nom::{
     branch::alt,
     bytes::complete::{tag, tag_no_case, take_while1, take_while_m_n},
@@ -211,7 +215,10 @@ fn parse_color(input: &str) -> IResult<&str, Color, VerboseError<&str>> {
         ),
         map(
             take_while1(|c: char| c.is_alphabetic() || c == '_'),
-            |name: &str| Color::Named(name.to_string()),
+            |name: &str| match NamedColor::from_str(name) {
+                Some(named_color) => Color::Named(named_color),
+                None => Color::None,
+            },
         ),
     ))(input)
 }
@@ -649,7 +656,7 @@ mod tests {
             crop_right: Some(F32(100.0)),
             crop_bottom: Some(F32(150.0)),
             filters: vec![
-                Filter::Fill(Color::Named("cyan".to_string()))
+                Filter::Fill(Color::Named(NamedColor::Cyan))
             ],
             ..Default::default()
         };
