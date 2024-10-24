@@ -1,5 +1,5 @@
 use crate::imagorpath::{color::Color, type_utils::F32};
-use color_eyre::Result;
+use color_eyre::{eyre, Result};
 use libvips::{
     ops::{self, FlattenOptions},
     VipsImage,
@@ -48,7 +48,7 @@ impl Filter {
                     return Ok(img.clone());
                 }
 
-                let (r, g, b) = color.to_rgb()?;
+                let (r, g, b) = color.to_rgb().ok_or(eyre::eyre!("Invalid color"))?;
 
                 ops::flatten_with_opts(
                     img,

@@ -11,7 +11,6 @@ use axum::{
     http::{request::Parts, StatusCode},
 };
 use color_eyre::Result;
-use nom::error::{make_error, ParseError};
 use nom::{
     branch::alt,
     bytes::complete::{tag, tag_no_case, take_while1, take_while_m_n},
