@@ -1,7 +1,10 @@
 use std::time::Instant;
 
 use crate::{
-    imagorpath::params::{Color, Filter, Fit, HAlign, ImageType, Params, VAlign},
+    imagorpath::{
+        color::Color,
+        params::{Filter, Fit, HAlign, ImageType, Params, VAlign},
+    },
     storage::storage::Blob,
 };
 use color_eyre::Result;

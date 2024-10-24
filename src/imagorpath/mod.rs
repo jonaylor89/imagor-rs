@@ -1,3 +1,4 @@
+pub mod color;
 pub mod generate;
 pub mod hasher;
 pub mod normalize;
