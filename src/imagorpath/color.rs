@@ -1,5 +1,6 @@
 use std::fmt;
 
+use libvips::{ops, VipsImage};
 use serde::{Deserialize, Serialize};
 
 macro_rules! define_colors {
@@ -47,7 +48,7 @@ pub enum Color {
 }
 
 impl Color {
-    pub fn to_rgb(&self) -> Option<(u8, u8, u8)> {
+    pub fn to_rgb(&self, img: &VipsImage) -> Option<(u8, u8, u8)> {
         match self {
             Color::Named(named) => {
                 let Color::Rgb(r, g, b) = named.to_rgb() else {
@@ -68,6 +69,17 @@ impl Color {
                     }
                 }
                 None
+            }
+            Color::Auto => {
+                let point = ops::getpoint(img, 0, 0).ok().map(|p| {
+                    if p.len() >= 3 {
+                        (p[0] as u8, p[1] as u8, p[2] as u8)
+                    } else {
+                        (0, 0, 0)
+                    }
+                });
+
+                point
             }
             _ => None,
         }

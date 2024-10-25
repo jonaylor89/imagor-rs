@@ -48,7 +48,7 @@ impl Filter {
                     return Ok(img.clone());
                 }
 
-                let (r, g, b) = color.to_rgb().ok_or(eyre::eyre!("Invalid color"))?;
+                let (r, g, b) = color.to_rgb(img).ok_or(eyre::eyre!("Invalid color"))?;
 
                 ops::flatten_with_opts(
                     img,
