@@ -1,4 +1,5 @@
-use super::params::{Fit, HAlign, Params, TrimBy, VAlign, F32};
+use super::params::{Fit, HAlign, Params, TrimBy, VAlign};
+use super::type_utils::F32;
 use core::fmt;
 use url::form_urlencoded;
 

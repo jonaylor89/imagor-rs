@@ -1,5 +1,6 @@
+use super::filter::Filter;
+use super::type_utils::F32;
 use core::fmt;
-use libvips::VipsImage;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use thiserror::Error;
@@ -68,39 +69,6 @@ impl FromStr for VAlign {
     }
 }
 
-// Newtype wrapper around f64
-#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
-pub struct F32(pub f32);
-
-impl fmt::Display for F32 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-// Implement PartialEq to override NaN behavior
-impl PartialEq for F32 {
-    fn eq(&self, other: &Self) -> bool {
-        if self.0.is_nan() && other.0.is_nan() {
-            true // Treat NaN as equal to NaN
-        } else {
-            self.0 == other.0
-        }
-    }
-}
-
-// Now implement Eq, since reflexivity is guaranteed
-impl Eq for F32 {}
-
-impl FromStr for F32 {
-    type Err = std::num::ParseFloatError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let f = s.parse::<f32>()?;
-        Ok(F32(f))
-    }
-}
-
 #[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq, Default)]
 pub enum TrimBy {
     #[serde(rename = "top-left")]
@@ -158,80 +126,6 @@ pub struct Params {
     pub filters: Vec<Filter>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub enum Filter {
-    BackgroundColor(Color),
-    Blur(F32),
-    Brightness(i32),
-    Contrast(i32),
-    Fill(Color),
-    Focal(FocalParams),
-    Format(ImageType),
-    Grayscale,
-    Hue(i32),
-    Label(LabelParams),
-    MaxBytes(usize),
-    MaxFrames(usize),
-    Orient(i32),
-    Page(usize),
-    Dpi(u32),
-    Proportion(F32),
-    Quality(u8),
-    Rgb(i32, i32, i32),
-    Rotate(i32),
-    RoundCorner(RoundedCornerParams),
-    Saturation(i32),
-    Sharpen(F32),
-    StripExif,
-    StripIcc,
-    StripMetadata,
-    Upscale,
-    Watermark(WatermarkParams),
-}
-
-impl Filter {
-    #[tracing::instrument(skip(img))]
-    pub fn apply(&self, img: &VipsImage) -> VipsImage {
-        match self {
-           // Apply the filter to the image
-       }
-    }
-}
-
-impl std::fmt::Display for Filter {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Filter::BackgroundColor(color) => write!(f, "background_color({})", color),
-            Filter::Blur(amount) => write!(f, "blur({})", amount.0),
-            Filter::Brightness(value) => write!(f, "brightness({})", value),
-            Filter::Contrast(value) => write!(f, "contrast({})", value),
-            Filter::Fill(color) => write!(f, "fill({})", color),
-            Filter::Focal(value) => write!(f, "focal({})", value),
-            Filter::Format(format) => write!(f, "format({:?})", format),
-            Filter::Grayscale => write!(f, "grayscale()"),
-            Filter::Hue(value) => write!(f, "hue({})", value),
-            Filter::Label(params) => write!(f, "label({:?})", params),
-            Filter::MaxBytes(value) => write!(f, "max_bytes({})", value),
-            Filter::MaxFrames(value) => write!(f, "max_frames({})", value),
-            Filter::Orient(value) => write!(f, "orient({})", value),
-            Filter::Page(value) => write!(f, "page({})", value),
-            Filter::Dpi(value) => write!(f, "dpi({})", value),
-            Filter::Proportion(value) => write!(f, "proportion({})", value.0),
-            Filter::Quality(value) => write!(f, "quality({})", value),
-            Filter::Rgb(r, g, b) => write!(f, "rgb({},{},{})", r, g, b),
-            Filter::Rotate(value) => write!(f, "rotate({})", value),
-            Filter::RoundCorner(params) => write!(f, "round_corner({:?})", params),
-            Filter::Saturation(value) => write!(f, "saturation({})", value),
-            Filter::Sharpen(value) => write!(f, "sharpen({})", value.0),
-            Filter::StripExif => write!(f, "strip_exif()"),
-            Filter::StripIcc => write!(f, "strip_icc()"),
-            Filter::StripMetadata => write!(f, "strip_metadata()"),
-            Filter::Upscale => write!(f, "upscale()"),
-            Filter::Watermark(params) => write!(f, "watermark({:?})", params),
-        }
-    }
-}
-
 #[derive(Error, Debug, Clone)]
 pub enum FilterParseError {
     #[error("Unknown filter: {0}")]
@@ -247,130 +141,10 @@ pub enum FilterParseError {
     ParseError(String),
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum ImageType {
-    GIF,
-    JPEG,
-    PNG,
-    MAGICK,
-    PDF,
-    SVG,
-    TIFF,
-    WEBP,
-    HEIF,
-    BMP,
-    AVIF,
-    JP2K,
-}
-
-impl ImageType {
-    pub fn is_animation_supported(&self) -> bool {
-        matches!(self, ImageType::GIF | ImageType::WEBP)
-    }
-}
-
-impl std::fmt::Display for ImageType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ImageType::GIF => write!(f, "gif"),
-            ImageType::JPEG => write!(f, "jpeg"),
-            ImageType::PNG => write!(f, "png"),
-            ImageType::MAGICK => write!(f, "magick"),
-            ImageType::PDF => write!(f, "pdf"),
-            ImageType::SVG => write!(f, "svg"),
-            ImageType::TIFF => write!(f, "tiff"),
-            ImageType::WEBP => write!(f, "webp"),
-            ImageType::HEIF => write!(f, "heif"),
-            ImageType::BMP => write!(f, "bmp"),
-            ImageType::AVIF => write!(f, "avif"),
-            ImageType::JP2K => write!(f, "jp2k"),
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Fit {
     FitIn,
     Stretch,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct LabelParams {
-    pub text: String,
-    pub x: LabelPosition,
-    pub y: LabelPosition,
-    pub size: u32,
-    pub color: Color,
-    pub alpha: Option<u8>,
-    pub font: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct WatermarkParams {
-    pub image: String,
-    pub x: WatermarkPosition,
-    pub y: WatermarkPosition,
-    pub alpha: u8,
-    pub w_ratio: Option<F32>,
-    pub h_ratio: Option<F32>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct RoundedCornerParams {
-    pub rx: u32,
-    pub ry: Option<u32>,
-    pub color: Option<Color>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub enum Color {
-    Named(String),
-    Hex(String),
-    Rgb(u8, u8, u8),
-    Auto,
-    Blur,
-    None,
-}
-
-impl fmt::Display for Color {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Color::Named(name) => write!(f, "{}", name),
-            Color::Hex(hex) => write!(f, "{}", hex),
-            Color::Rgb(r, g, b) => write!(f, "{},{},{}", r, g, b),
-            Color::Auto => write!(f, "auto"),
-            Color::Blur => write!(f, "blur"),
-            Color::None => write!(f, "none"),
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub enum FocalParams {
-    Region {
-        top_left: (F32, F32),
-        bottom_right: (F32, F32),
-    },
-    Point(F32, F32),
-}
-
-impl fmt::Display for FocalParams {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            FocalParams::Region {
-                top_left,
-                bottom_right,
-            } => {
-                write!(
-                    f,
-                    "{}x{}:{}x{}",
-                    top_left.0, top_left.1, bottom_right.0, bottom_right.1
-                )
-            }
-            FocalParams::Point(x, y) => write!(f, "{}x{}", x, y),
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -379,29 +153,6 @@ pub enum Angle {
     Deg90,
     Deg180,
     Deg270,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub enum LabelPosition {
-    Pixels(i32),
-    Percentage(F32),
-    Left,
-    Right,
-    Center,
-    Top,
-    Bottom,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub enum WatermarkPosition {
-    Pixels(i32),
-    Percentage(F32),
-    Left,
-    Right,
-    Center,
-    Top,
-    Bottom,
-    Repeat,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
