@@ -103,6 +103,9 @@ impl Filter {
                     color_eyre::Report::msg(format!("Failed to apply rounded corners: {}", e))
                 })
             }
+            Filter::Rotate(angle) => {
+                ops::rotate(img, angle).map_err(|e| eyre!("Failed to apply rotate filter: {}", e))
+            }
             _ => Ok(img.clone()),
         }
     }
