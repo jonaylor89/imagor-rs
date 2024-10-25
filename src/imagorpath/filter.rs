@@ -1,7 +1,7 @@
 use crate::imagorpath::{color::Color, type_utils::F32};
 use color_eyre::{eyre, Result};
 use libvips::{
-    ops::{self, DrawRectOptions, FlattenOptions},
+    ops::{self, Composite2Options, FlattenOptions, TextOptions},
     VipsImage,
 };
 use serde::{Deserialize, Serialize};
@@ -61,50 +61,186 @@ impl Filter {
                     color_eyre::Report::msg(format!("Failed to apply background color: {}", e))
                 })
             }
-            Filter::Grayscale => img
-                .grayscale()
-                .map_err(|e| eyre!("Failed to apply grayscale filter: {}", e)),
-            Filter::RoundCorner(rcp) => {
+            Filter::Grayscale => ops::colourspace(img, ops::Interpretation::BW)
+                .map_err(|e| eyre::eyre!("Failed to apply grayscale filter: {}", e)),
+            Filter::RoundCorner(params) => {
                 let width = img.get_width();
                 let height = img.get_height();
 
-                // Create a black rectangle with alpha channel
+                // Create a mask image
                 let mask = ops::black(width, height)?;
 
-                // Create white rounded rectangle
-                let radius_x = params.rx as f64;
-                let radius_y = params.ry.unwrap_or(params.rx) as f64;
-
-                // Draw rounded rectangle on the mask
-                let mask = ops::draw_rect_with_opts(
+                // Draw filled rectangle without corners
+                ops::draw_rect(
                     &mask,
-                    255.0,  // white
-                    0,      // x
-                    0,      // y
-                    width,  // w
-                    height, // h
-                    &DrawOptions {
-                        radius_x,
-                        radius_y,
-                        fill: true,
+                    &mut [255.0], // white
+                    0,            // x
+                    0,            // y
+                    width,        // w
+                    height,       // h
+                )?;
+
+                // Ensure image has alpha channel
+                let img = if !img.image_hasalpha() {
+                    &ops::bandjoin_const(&img, &mut [255.0])?
+                } else {
+                    img
+                };
+
+                // Calculate corner radius
+                let rx = params.rx as f64;
+                let ry = params.ry.unwrap_or(params.rx) as f64;
+
+                // Create a corner mask
+                let corner = ops::black(rx as i32, ry as i32)?;
+                ops::draw_circle(
+                    &corner,
+                    &mut [255.0],
+                    rx as i32 / 2,
+                    ry as i32 / 2,
+                    rx as i32 / 2,
+                )?;
+
+                // Copy corner to all 4 corners of the mask (rotated appropriately)
+                let corners = [
+                    (0, 0),                                  // Top-left
+                    (width - rx as i32, 0),                  // Top-right
+                    (0, height - ry as i32),                 // Bottom-left
+                    (width - rx as i32, height - ry as i32), // Bottom-right
+                ];
+
+                for (x, y) in corners.iter() {
+                    ops::composite_2_with_opts(
+                        &mask,
+                        &corner,
+                        ops::BlendMode::Over,
+                        &Composite2Options {
+                            x: *x,
+                            y: *y,
+                            ..Default::default()
+                        },
+                    )?;
+                }
+
+                // Multiply the image's alpha channel with our mask
+                ops::multiply(img, &mask)
+                    .map_err(|e| eyre::eyre!("Failed to apply rounded corners: {}", e))
+            }
+            Filter::Rotate(angle) => {
+                let angle = *angle as f64;
+                ops::rotate(img, angle)
+                    .map_err(|e| eyre::eyre!("Failed to apply rotate filter: {}", e))
+            }
+            Filter::Label(params) => {
+                // Ensure image is in RGB/RGBA color space
+                let img = match img.get_interpretation()? as i32 {
+                    // Compare raw discriminant values instead of enum variants
+                    x if x == ops::Interpretation::BW as i32
+                        || x == ops::Interpretation::Cmyk as i32
+                        || x == ops::Interpretation::Lab as i32 =>
+                    {
+                        &ops::colourspace(img, ops::Interpretation::Srgb)?
+                    }
+                    _ => img,
+                };
+
+                // Add alpha channel if not present
+                let img = if !img.image_hasalpha() {
+                    &ops::bandjoin_const(&img, &mut [255.0])?
+                } else {
+                    img
+                };
+
+                // Calculate x position
+                let width = img.get_width();
+                let x = match params.x {
+                    LabelPosition::Center => width / 2,
+                    LabelPosition::Right => width,
+                    LabelPosition::Left => 0,
+                    LabelPosition::Pixels(px) => {
+                        if px < 0 {
+                            width + px
+                        } else {
+                            px
+                        }
+                    }
+                    LabelPosition::Percentage(pct) => (pct.0 * width as f32) as i32,
+                    _ => 0,
+                };
+
+                // Calculate y position
+                let height = img.get_height();
+                let y = match params.y {
+                    LabelPosition::Center => (height - params.size as i32) / 2,
+                    LabelPosition::Top => 0,
+                    LabelPosition::Bottom => height - params.size as i32,
+                    LabelPosition::Pixels(px) => {
+                        if px < 0 {
+                            height + px - params.size as i32
+                        } else {
+                            px
+                        }
+                    }
+                    LabelPosition::Percentage(pct) => (pct.0 * height as f32) as i32,
+                    _ => 0,
+                };
+
+                // Get text color
+                let (r, g, b) = params
+                    .color
+                    .to_rgb(&img)
+                    .ok_or(eyre::eyre!("Invalid color"))?;
+
+                // Calculate alpha value (default to fully opaque if not specified)
+                let alpha = params.alpha.unwrap_or(255);
+
+                // Use default font if none specified
+                let font = params.font.as_deref().unwrap_or("sans");
+
+                // Create text overlay
+                let text = ops::text_with_opts(
+                    &params.text,
+                    &TextOptions {
+                        font: font.to_string(),
+                        width,
+                        height: params.size as i32,
+                        align: match params.x {
+                            LabelPosition::Center => ops::Align::Centre,
+                            LabelPosition::Right => ops::Align::High,
+                            _ => ops::Align::Low,
+                        },
+                        dpi: 72,
+                        justify: true,
+                        rgba: true,
+                        spacing: 0,
                         ..Default::default()
                     },
                 )?;
 
-                // If image doesn't have alpha channel, add one
-                let img = if !img.image_hasalpha() {
-                    ops::bandjoin_const(&img, &[255.0])?
-                } else {
-                    img.clone()
-                };
+                // Colorize the text
+                let text = ops::linear(
+                    &text,
+                    &mut [
+                        r as f64 / 255.0,
+                        g as f64 / 255.0,
+                        b as f64 / 255.0,
+                        alpha as f64 / 255.0,
+                    ],
+                    &mut [0.0, 0.0, 0.0, 0.0],
+                )?;
 
-                // Multiply the image's alpha channel with our mask
-                ops::multiply(&img, &mask).map_err(|e| {
-                    color_eyre::Report::msg(format!("Failed to apply rounded corners: {}", e))
-                })
-            }
-            Filter::Rotate(angle) => {
-                ops::rotate(img, angle).map_err(|e| eyre!("Failed to apply rotate filter: {}", e))
+                // Composite text onto image
+                ops::composite_2_with_opts(
+                    img,
+                    &text,
+                    ops::BlendMode::Over,
+                    &Composite2Options {
+                        x,
+                        y,
+                        ..Default::default()
+                    },
+                )
+                .map_err(|e| eyre::eyre!("Failed to apply label: {}", e))
             }
             _ => Ok(img.clone()),
         }
