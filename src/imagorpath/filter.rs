@@ -61,6 +61,9 @@ impl Filter {
                     color_eyre::Report::msg(format!("Failed to apply background color: {}", e))
                 })
             }
+            Filter::Grayscale => img
+                .grayscale()
+                .map_err(|e| eyre!("Failed to apply grayscale filter: {}", e)),
             _ => Ok(img.clone()),
         }
     }
