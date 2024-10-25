@@ -17,9 +17,11 @@ macro_rules! define_colors {
             }
 
             pub fn from_str(s: &str) -> Option<Self> {
-                match s.to_lowercase().as_str() {
-                    $(stringify!($name).to_lowercase() => Some(Self::$name),)*
-                    _ => None
+                match s {
+                    $(
+                        s if s.eq_ignore_ascii_case(stringify!($name)) => Some(Self::$name),
+                    )*
+                    _ => None,
                 }
             }
         }
