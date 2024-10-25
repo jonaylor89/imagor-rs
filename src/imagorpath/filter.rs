@@ -1,7 +1,7 @@
 use crate::imagorpath::{color::Color, type_utils::F32};
 use color_eyre::{eyre, Result};
 use libvips::{
-    ops::{self, FlattenOptions},
+    ops::{self, DrawRectOptions, FlattenOptions},
     VipsImage,
 };
 use serde::{Deserialize, Serialize};
@@ -64,6 +64,45 @@ impl Filter {
             Filter::Grayscale => img
                 .grayscale()
                 .map_err(|e| eyre!("Failed to apply grayscale filter: {}", e)),
+            Filter::RoundCorner(rcp) => {
+                let width = img.get_width();
+                let height = img.get_height();
+
+                // Create a black rectangle with alpha channel
+                let mask = ops::black(width, height)?;
+
+                // Create white rounded rectangle
+                let radius_x = params.rx as f64;
+                let radius_y = params.ry.unwrap_or(params.rx) as f64;
+
+                // Draw rounded rectangle on the mask
+                let mask = ops::draw_rect_with_opts(
+                    &mask,
+                    255.0,  // white
+                    0,      // x
+                    0,      // y
+                    width,  // w
+                    height, // h
+                    &DrawOptions {
+                        radius_x,
+                        radius_y,
+                        fill: true,
+                        ..Default::default()
+                    },
+                )?;
+
+                // If image doesn't have alpha channel, add one
+                let img = if !img.image_hasalpha() {
+                    ops::bandjoin_const(&img, &[255.0])?
+                } else {
+                    img.clone()
+                };
+
+                // Multiply the image's alpha channel with our mask
+                ops::multiply(&img, &mask).map_err(|e| {
+                    color_eyre::Report::msg(format!("Failed to apply rounded corners: {}", e))
+                })
+            }
             _ => Ok(img.clone()),
         }
     }
