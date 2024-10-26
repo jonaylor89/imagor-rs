@@ -260,8 +260,8 @@ impl Filter {
                 let b = 128.0 - a * 128.0;
 
                 let size = if img.image_hasalpha() { 4 } else { 3 };
-                let alpha = vec![a; size];
-                let beta = vec![b; size];
+                let mut alpha = vec![a; size];
+                let mut beta = vec![b; size];
 
                 ops::linear(img, alpha.as_mut_slice(), beta.as_mut_slice())
                     .map_err(|e| eyre::eyre!("Failed to apply contrast filter: {}", e))
