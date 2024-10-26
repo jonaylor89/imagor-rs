@@ -330,7 +330,7 @@ fn parse_filter(input: &str) -> IResult<&str, Filter, VerboseError<&str>> {
         }
         "grayscale" => (input, Filter::Grayscale),
         "hue" => {
-            let (_, hue) = map(nom::character::complete::i32, Filter::Hue)(args)?;
+            let (_, hue) = map(parse_f32, Filter::Hue)(args)?;
             (input, hue)
         }
         "label" => {
@@ -387,7 +387,7 @@ fn parse_filter(input: &str) -> IResult<&str, Filter, VerboseError<&str>> {
             (input, round_corner)
         }
         "saturation" => {
-            let (_, saturation) = map(nom::character::complete::i32, Filter::Saturation)(args)?;
+            let (_, saturation) = map(parse_f32, Filter::Saturation)(args)?;
             (input, saturation)
         }
         "sharpen" => {
@@ -419,8 +419,8 @@ fn parse_filters(input: &str) -> IResult<&str, Vec<Filter>, VerboseError<&str>> 
     )(input)
 }
 
-fn parse_modulate_params(input: &str) -> IResult<&str, (u32, u32, u32), VerboseError<&str>> {
-    let (input, modulate) = separated_list1(char(','), nom::character::complete::u32)(input)?;
+fn parse_modulate_params(input: &str) -> IResult<&str, (F32, F32, F32), VerboseError<&str>> {
+    let (input, modulate) = separated_list1(char(','), parse_f32)(input)?;
     if modulate.len() != 3 {
         Err(nom::Err::Error(VerboseError {
             errors: vec![(
@@ -433,8 +433,8 @@ fn parse_modulate_params(input: &str) -> IResult<&str, (u32, u32, u32), VerboseE
     }
 }
 
-fn parse_rgb(input: &str) -> IResult<&str, (i32, i32, i32), VerboseError<&str>> {
-    let (input, rgb) = separated_list1(char(','), nom::character::complete::i32)(input)?;
+fn parse_rgb(input: &str) -> IResult<&str, (F32, F32, F32), VerboseError<&str>> {
+    let (input, rgb) = separated_list1(char(','), parse_f32)(input)?;
     if rgb.len() != 3 {
         Err(nom::Err::Error(VerboseError {
             errors: vec![(input, VerboseErrorKind::Context("RGB requires 3 values"))],

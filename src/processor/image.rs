@@ -395,44 +395,34 @@ impl Image {
                 Ok(Self(img))
             }
             Filter::Modulate(brightness, saturation, hue) => {
-                let b = 1.0 + (*brightness as f64) / 100.0;
-                let s = 1.0 + (*saturation as f64) / 100.0;
-                let h = *hue as f64;
+                let b = 1.0 + (brightness.0 as f64) / 100.0;
+                let s = 1.0 + (saturation.0 as f64) / 100.0;
+                let h = hue.0 as f64;
 
-                let colorspace = match self.0.get_interpretation()? {
-                    ops::Interpretation::Rgb => ops::Interpretation::Srgb,
-                    cs => cs,
-                };
-
-                let mut multiplications: Vec<f64> = if self.0.image_hasalpha() {
-                    vec![b, s, 1.0, 1.0]
-                } else {
-                    vec![b, s, 1.0]
-                };
-                let mut additions: Vec<f64> = if self.0.image_hasalpha() {
-                    vec![0.0, 0.0, h, 0.0]
-                } else {
-                    vec![0.0, 0.0, h]
-                };
-
-                let colorspace_img = ops::colourspace(&self.0, ops::Interpretation::Lch)?;
-                let linear_img = ops::linear(
-                    &colorspace_img,
-                    multiplications.as_mut_slice(),
-                    additions.as_mut_slice(),
-                )?;
-                let final_img = ops::colourspace(&linear_img, colorspace)?;
-
-                Ok(Image::new(final_img))
+                self.modulate(b, s, h)
             }
             Filter::Hue(hue) => {
-                todo!()
+                let h = hue.0 as f64;
+                self.modulate(1.0, 1.0, h)
             }
-            Filter::Saturation(s) => {
-                todo!()
+            Filter::Saturation(saturation) => {
+                let s = 1.0 + (saturation.0 as f64) / 100.0;
+                return self.modulate(1.0, s, 0.0);
             }
-            Filter::Rgb(r, g, b) => {
-                todo!()
+            Filter::Rgb(red, green, blue) => {
+                let r = red.0 as f64 * 255.0 / 100.0;
+                let g = green.0 as f64 * 255.0 / 100.0;
+                let b = blue.0 as f64 * 255.0 / 100.0;
+
+                let (mut x, mut y) = if self.0.image_hasalpha() {
+                    (vec![1.0; 4], vec![r, g, b, 0.0])
+                } else {
+                    (vec![1.0; 3], vec![r, g, b])
+                };
+
+                let img = ops::linear(&self.0, x.as_mut_slice(), y.as_mut_slice())?;
+
+                Ok(Self(img))
             }
             Filter::Blur(blur) => {
                 todo!()
@@ -606,6 +596,35 @@ impl Image {
                 Ok(Self(embedded))
             }
         }
+    }
+
+    #[tracing::instrument(skip(self))]
+    fn modulate(&self, b: f64, s: f64, h: f64) -> Result<Self> {
+        let colorspace = match self.0.get_interpretation()? {
+            ops::Interpretation::Rgb => ops::Interpretation::Srgb,
+            cs => cs,
+        };
+
+        let mut multiplications: Vec<f64> = if self.0.image_hasalpha() {
+            vec![b, s, 1.0, 1.0]
+        } else {
+            vec![b, s, 1.0]
+        };
+        let mut additions: Vec<f64> = if self.0.image_hasalpha() {
+            vec![0.0, 0.0, h, 0.0]
+        } else {
+            vec![0.0, 0.0, h]
+        };
+
+        let colorspace_img = ops::colourspace(&self.0, ops::Interpretation::Lch)?;
+        let linear_img = ops::linear(
+            &colorspace_img,
+            multiplications.as_mut_slice(),
+            additions.as_mut_slice(),
+        )?;
+        let final_img = ops::colourspace(&linear_img, colorspace)?;
+
+        Ok(Image::new(final_img))
     }
 }
 
