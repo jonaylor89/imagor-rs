@@ -43,26 +43,6 @@ impl Filter {
     pub fn apply(&self, img: &VipsImage) -> Result<VipsImage> {
         // Apply the filter to the imag
         match self {
-            Filter::BackgroundColor(color) => {
-                if !img.image_hasalpha() {
-                    return Ok(img.clone());
-                }
-
-                let (r, g, b) = color.to_rgb(img).ok_or(eyre::eyre!("Invalid color"))?;
-
-                ops::flatten_with_opts(
-                    img,
-                    &FlattenOptions {
-                        background: vec![r.into(), g.into(), b.into()],
-                        ..Default::default()
-                    },
-                )
-                .map_err(|e| {
-                    color_eyre::Report::msg(format!("Failed to apply background color: {}", e))
-                })
-            }
-            Filter::Grayscale => ops::colourspace(img, ops::Interpretation::BW)
-                .map_err(|e| eyre::eyre!("Failed to apply grayscale filter: {}", e)),
             Filter::RoundCorner(params) => {
                 let width = img.get_width();
                 let height = img.get_height();
@@ -241,6 +221,50 @@ impl Filter {
                     },
                 )
                 .map_err(|e| eyre::eyre!("Failed to apply label: {}", e))
+            }
+            Filter::Grayscale => ops::colourspace(img, ops::Interpretation::BW)
+                .map_err(|e| eyre::eyre!("Failed to apply grayscale filter: {}", e)),
+            Filter::Brightness(brightness) => {
+                let size = if img.image_hasalpha() { 4 } else { 3 };
+                let adjusted_brightness = *brightness as f64 / 255.0;
+
+                let mut alpha = vec![1.0; size];
+                let mut beta = vec![adjusted_brightness; size];
+
+                ops::linear(img, alpha.as_mut_slice(), beta.as_mut_slice())
+                    .map_err(|e| eyre::eyre!("Failed to apply brightness filter: {}", e))
+            }
+            Filter::BackgroundColor(color) => {
+                if !img.image_hasalpha() {
+                    return Ok(img.clone());
+                }
+
+                let (r, g, b) = color.to_rgb(img).ok_or(eyre::eyre!("Invalid color"))?;
+
+                ops::flatten_with_opts(
+                    img,
+                    &FlattenOptions {
+                        background: vec![r.into(), g.into(), b.into()],
+                        ..Default::default()
+                    },
+                )
+                .map_err(|e| {
+                    color_eyre::Report::msg(format!("Failed to apply background color: {}", e))
+                })
+            }
+            Filter::Contrast(contrast) => {
+                let adjusted_contrast = *contrast as f64 / 255.0;
+
+                let a = adjusted_contrast.clamp(-255.0, 255.0);
+                let a = (259.0 * (a + 255.0)) / (255.0 * (259.0 - a));
+                let b = 128.0 - a * 128.0;
+
+                let size = if img.image_hasalpha() { 4 } else { 3 };
+                let alpha = vec![a; size];
+                let beta = vec![b; size];
+
+                ops::linear(img, alpha.as_mut_slice(), beta.as_mut_slice())
+                    .map_err(|e| eyre::eyre!("Failed to apply contrast filter: {}", e))
             }
             _ => Ok(img.clone()),
         }

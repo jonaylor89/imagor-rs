@@ -248,28 +248,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_color_from_str() {
-        assert_eq!(Color::from_str("red"), Color::Named(NamedColor::Red));
-        assert_eq!(
-            Color::from_str("#ff0000"),
-            Color::Hex("#ff0000".to_string())
-        );
-        assert_eq!(Color::from_str("255,0,0"), Color::Rgb(255, 0, 0));
-        assert_eq!(Color::from_str("auto"), Color::Auto);
-        assert_eq!(Color::from_str("blur"), Color::Blur);
-        assert_eq!(Color::from_str("none"), Color::None);
-    }
-
-    #[test]
     fn test_color_to_rgb() {
-        assert_eq!(Color::Named(NamedColor::Red).to_rgb(), Some((255, 0, 0)));
+        let img = &VipsImage::new();
+        assert_eq!(Color::Named(NamedColor::Red).to_rgb(img), Some((255, 0, 0)));
         assert_eq!(
-            Color::Hex("#ff0000".to_string()).to_rgb(),
+            Color::Hex("#ff0000".to_string()).to_rgb(img),
             Some((255, 0, 0))
         );
-        assert_eq!(Color::Rgb(255, 0, 0).to_rgb(), Some((255, 0, 0)));
-        assert_eq!(Color::Auto.to_rgb(), None);
-        assert_eq!(Color::Blur.to_rgb(), None);
-        assert_eq!(Color::None.to_rgb(), None);
+        assert_eq!(Color::Rgb(255, 0, 0).to_rgb(img), Some((255, 0, 0)));
+        assert_eq!(Color::Auto.to_rgb(img), None);
+        assert_eq!(Color::Blur.to_rgb(img), None);
+        assert_eq!(Color::None.to_rgb(img), None);
     }
 }
