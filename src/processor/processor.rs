@@ -14,8 +14,9 @@ use libvips::{
     VipsApp, VipsImage,
 };
 use metrics::IntoF64;
-use thiserror::Error;
 use tracing::{debug, error};
+
+use super::image::{Image, ProcessError};
 
 pub struct Processor {
     disable_blur: bool,
@@ -58,14 +59,6 @@ pub struct FocalPoint {
     pub bottom: f32,
 }
 
-#[derive(Error, Debug)]
-enum ProcessError {
-    #[error("Image processing failed: {0}")]
-    ImageProcessingError(String),
-    #[error("Failed to load image")]
-    ImageLoadError,
-}
-
 impl Processor {
     #[tracing::instrument(skip(self))]
     pub fn startup(&self) -> Result<()> {
@@ -81,18 +74,10 @@ impl Processor {
     pub fn process(&self, blob: &Blob, params: &Params) -> Result<()> {
         let processing_params = self.preprocess(blob, params);
         let img = self.load_image(blob, params, &processing_params)?;
-        let img = apply_orientation(img, processing_params.orient)?;
-        let (width, height) = calculate_dimensions(&img, params, processing_params.upscale);
-        let img = resize_image(
-            img,
-            width,
-            height,
-            params.fit,
-            processing_params.upscale,
-            params,
-        )?;
-
-        let img = apply_flip(img, params.h_flip, params.v_flip)?;
+        let img = img.apply_orientation(processing_params.orient)?;
+        let (width, height) = img.calculate_dimensions(params, processing_params.upscale);
+        let img = img.resize_image(width, height, params.fit, processing_params.upscale, params)?;
+        let img = img.apply_flip(params.h_flip, params.v_flip)?;
 
         // TODO: Apply filters
         let _filted_img = self.apply_filters(img, params, &processing_params);
@@ -225,14 +210,14 @@ impl Processor {
         blob: &Blob,
         params: &Params,
         processing_params: &ProcessingParams,
-    ) -> Result<VipsImage, ProcessError> {
+    ) -> Result<Image, ProcessError> {
         if !processing_params.thumbnail_not_supported
             && params.crop_bottom.is_none()
             && params.crop_top.is_none()
             && params.crop_left.is_none()
             && params.crop_right.is_none()
         {
-            return match (params.fit, params.width, params.height) {
+            let img = match (params.fit, params.width, params.height) {
                 (Some(Fit::FitIn), Some(width), Some(height)) => {
                     let w = width.max(1);
                     let h = height.max(1);
@@ -336,10 +321,12 @@ impl Processor {
                 _ => VipsImage::new_from_buffer(blob.as_ref(), "")
                     .map_err(|_| ProcessError::ImageLoadError),
             };
+
+            return img.map(Image::new);
         };
 
         // If we couldn't create a thumbnail, load the full image
-        if processing_params.thumbnail_not_supported {
+        let img = if processing_params.thumbnail_not_supported {
             VipsImage::new_from_buffer(blob.as_ref(), "").map_err(|_| ProcessError::ImageLoadError)
         } else {
             ops::thumbnail_buffer_with_opts(
@@ -355,16 +342,18 @@ impl Processor {
             .map_err(|_| {
                 ProcessError::ImageProcessingError("Failed to create default thumbnail".into())
             })
-        }
+        };
+
+        return img.map(Image::new);
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self, img))]
     fn apply_filters(
         &self,
-        img: VipsImage,
+        img: Image,
         params: &Params,
         processing_params: &ProcessingParams,
-    ) -> Result<VipsImage, ProcessError> {
+    ) -> Result<Image, ProcessError> {
         let truncate_length = if self.max_filter_ops > 0 {
             self.max_filter_ops.min(params.filters.len())
         } else {
@@ -382,7 +371,7 @@ impl Processor {
             }
 
             let start = Instant::now();
-            let new_image = filter.apply(&img);
+            let new_image = img.apply(filter);
             let elapsed = start.elapsed().as_millis();
 
             debug!("filter |{}| took {}", filter, elapsed);
@@ -397,85 +386,5 @@ impl Processor {
         });
 
         Ok(filtered)
-    }
-}
-
-fn apply_orientation(img: VipsImage, orient: i32) -> Result<VipsImage, ProcessError> {
-    if orient > 0 {
-        ops::rotate(&img, orient.into_f64())
-            .map_err(|_| ProcessError::ImageProcessingError("Failed to apply orientation".into()))
-    } else {
-        Ok(img)
-    }
-}
-
-fn calculate_dimensions(img: &VipsImage, params: &Params, upscale: bool) -> (i32, i32) {
-    match (params.width, params.height) {
-        (None, None) => (img.get_width(), img.get_page_height()),
-        (None, Some(h)) => {
-            let w = img.get_width() * h / img.get_page_height();
-            (if !upscale { w.min(img.get_width()) } else { w }, h)
-        }
-        (Some(w), None) => {
-            let h = img.get_page_height() * w / img.get_width();
-            (
-                w,
-                if !upscale {
-                    h.min(img.get_page_height())
-                } else {
-                    h
-                },
-            )
-        }
-        (Some(w), Some(h)) => (w, h),
-    }
-}
-
-fn resize_image(
-    img: VipsImage,
-    width: i32,
-    height: i32,
-    fit: Option<Fit>,
-    upscale: bool,
-    _params: &Params,
-) -> Result<VipsImage, ProcessError> {
-    let should_resize = upscale || width < img.get_width() || height < img.get_page_height();
-    let size = match fit {
-        Some(Fit::FitIn) => Size::Both,
-        Some(Fit::Stretch) => Size::Force,
-        _ => return Ok(img),
-    };
-
-    if should_resize {
-        ops::thumbnail_image_with_opts(
-            &img,
-            width,
-            &ThumbnailImageOptions {
-                height,
-                crop: Interesting::None,
-                size,
-                ..Default::default()
-            },
-        )
-        .map_err(|_| ProcessError::ImageProcessingError("Failed to resize image".into()))
-    } else {
-        Ok(img)
-    }
-}
-
-fn apply_flip(img: VipsImage, h_flip: bool, v_flip: bool) -> Result<VipsImage, ProcessError> {
-    let img = if h_flip {
-        ops::flip(&img, Direction::Horizontal).map_err(|_| {
-            ProcessError::ImageProcessingError("Failed to apply horizontal flip".into())
-        })?
-    } else {
-        img
-    };
-
-    if v_flip {
-        ops::flip(&img, Direction::Vertical)
-            .map_err(|_| ProcessError::ImageProcessingError("Failed to apply vertical flip".into()))
-    } else {
-        Ok(img)
     }
 }

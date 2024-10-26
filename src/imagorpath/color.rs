@@ -3,6 +3,8 @@ use std::fmt;
 use libvips::{ops, VipsImage};
 use serde::{Deserialize, Serialize};
 
+use crate::processor::image::Image;
+
 macro_rules! define_colors {
     ($($name:ident => ($r:expr, $g:expr, $b:expr)),* $(,)?) => {
         #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
