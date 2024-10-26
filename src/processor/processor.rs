@@ -10,7 +10,7 @@ use crate::{
 };
 use color_eyre::Result;
 use libvips::{
-    ops::{self, Direction, Interesting, Size, ThumbnailBufferOptions, ThumbnailImageOptions},
+    ops::{self, Interesting, Size, ThumbnailBufferOptions},
     VipsApp, VipsImage,
 };
 use tracing::{debug, error};
