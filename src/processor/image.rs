@@ -1,6 +1,7 @@
 use std::ops::Deref;
 
 use crate::imagorpath::{
+    color::Color,
     filter::{Filter, LabelPosition},
     params::{Fit, Params},
 };
@@ -10,8 +11,8 @@ use color_eyre::{
 };
 use libvips::{
     ops::{
-        self, Composite2Options, Direction, FlattenOptions, Interesting, Size, TextOptions,
-        ThumbnailImageOptions,
+        self, Composite2Options, Direction, EmbedOptions, FlattenOptions, Interesting, Size,
+        TextOptions, ThumbnailImageOptions,
     },
     VipsImage,
 };
@@ -48,6 +49,10 @@ impl Image {
     // Method to get a reference to the inner VipsImage
     pub fn as_inner(&self) -> &VipsImage {
         &self.0
+    }
+
+    pub fn is_animated(&self) -> bool {
+        self.0.get_height() > self.0.get_page_height()
     }
 
     #[instrument(skip(self))]
@@ -450,18 +455,15 @@ impl Image {
             Filter::Padding(color, padding) => {
                 let (left, top, right, bottom) = padding.get_values();
 
-                todo!()
-                // return v.fill(
-                //     ctx,
-                //     img,
-                //     img.Width(),
-                //     img.PageHeight(),
-                //     left,
-                //     top,
-                //     right,
-                //     bottom,
-                //     c,
-                // );
+                self.fill(
+                    self.0.get_width(),
+                    self.0.get_height(),
+                    left,
+                    top,
+                    right,
+                    bottom,
+                    color,
+                )
             }
             Filter::Proportion(proporation) => {
                 let mut scale = proporation.0.clamp(0.0, 100.0);
@@ -486,6 +488,123 @@ impl Image {
                 Ok(Self(thumbnail))
             }
             _ => Ok(self.to_owned()),
+        }
+    }
+
+    #[tracing::instrument(skip(self))]
+    fn fill(
+        &self,
+        width: i32,
+        height: i32,
+        p_left: i32,
+        p_top: i32,
+        p_right: i32,
+        p_bottom: i32,
+        color: &Color,
+    ) -> Result<Self> {
+        let left = (width - self.0.get_width()) / 2 + p_left;
+        let top = (height - self.0.get_page_height()) / 2 + p_top;
+        let total_width = width + p_left + p_right;
+        let total_height = height + p_top + p_bottom;
+
+        match color {
+            Color::None => {
+                // Handle transparent padding
+                let img = if self.0.get_bands() < 3 {
+                    // Convert to sRGB if needed
+                    ops::colourspace(&self.0, ops::Interpretation::Srgb)?
+                } else {
+                    self.0.clone()
+                };
+
+                // Add alpha channel if needed
+                let img = if !img.image_hasalpha() {
+                    ops::bandjoin_const(&img, &mut [255.0])?
+                } else {
+                    img
+                };
+
+                // Embed with transparent background
+                let embedded = ops::embed_with_opts(
+                    &img,
+                    left,
+                    top,
+                    total_width,
+                    total_height,
+                    &ops::EmbedOptions {
+                        extend: ops::Extend::Background,
+                        background: vec![0.0, 0.0, 0.0, 0.0],
+                        ..Default::default()
+                    },
+                )?;
+
+                Ok(Self(embedded))
+            }
+            Color::Blur if !self.is_animated() => {
+                // Handle blur padding (if image is not animated)
+                let copy = self.0.clone();
+
+                // Create blurred background
+                let blurred = ops::thumbnail_image_with_opts(
+                    &self.0,
+                    total_width,
+                    &ThumbnailImageOptions {
+                        height: total_height,
+                        size: Size::Force,
+                        ..Default::default()
+                    },
+                )?;
+                let blurred = ops::gaussblur(&blurred, 50.0)?;
+
+                // Composite original image over blurred background
+                let result = ops::composite_2_with_opts(
+                    &blurred,
+                    &copy,
+                    ops::BlendMode::Over,
+                    &Composite2Options {
+                        x: left,
+                        y: top,
+                        ..Default::default()
+                    },
+                )?;
+
+                Ok(Self(result))
+            }
+            _ => {
+                // Handle solid color padding
+                let (r, g, b) = color
+                    .to_rgb(self.as_inner())
+                    .ok_or_else(|| eyre::eyre!("Invalid color"))?;
+
+                // Flatten image if it has alpha channel
+                let img = if self.0.image_hasalpha() {
+                    ops::flatten_with_opts(
+                        &self.0,
+                        &FlattenOptions {
+                            background: vec![r.into(), g.into(), b.into()],
+                            ..Default::default()
+                        },
+                    )?
+                } else {
+                    self.0.clone()
+                };
+
+                // Embed with colored background
+                let embedded = ops::embed_with_opts(
+                    &img,
+                    left,
+                    top,
+                    total_width,
+                    total_height,
+                    &EmbedOptions {
+                        extend: ops::Extend::Background,
+                        background: vec![r.into(), g.into(), b.into()],
+                        ..Default::default()
+                    },
+                )?;
+
+                Ok(Self(embedded))
+            }
         }
     }
 }
