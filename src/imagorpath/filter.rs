@@ -1,7 +1,12 @@
 use crate::imagorpath::{color::Color, type_utils::F32};
-use color_eyre::{eyre, Result};
+use color_eyre::{
+    eyre::{self, Context},
+    Result,
+};
 use libvips::{
-    ops::{self, Composite2Options, FlattenOptions, TextOptions},
+    ops::{
+        self, Composite2Options, FlattenOptions, Interesting, TextOptions, ThumbnailImageOptions,
+    },
     VipsImage,
 };
 use serde::{Deserialize, Serialize};
@@ -297,6 +302,58 @@ impl Filter {
                 let final_img = ops::colourspace(&linear_img, colorspace)?;
 
                 Ok(final_img)
+            }
+            Filter::Hue(hue) => {
+                todo!()
+            }
+            Filter::Saturation(s) => {
+                todo!()
+            }
+            Filter::Rgb(r, g, b) => {
+                todo!()
+            }
+            Filter::Blur(blur) => {
+                todo!()
+            }
+            Filter::Sharpen(sharpen) => {
+                todo!()
+            }
+            Filter::StripIcc => {
+                todo!()
+            }
+            Filter::StripExif => {
+                todo!()
+            }
+            // Filter::Trim => {
+            //     todo!()
+            // }
+            // Filter::SetFrames(frames) => {
+            //     todo!()
+            // }
+            // Filter::Padding(padding) => {
+            //     todo!()
+            // }
+            Filter::Proportion(proporation) => {
+                let mut scale = proporation.0.clamp(0.0, 100.0);
+                if scale > 1.0 {
+                    scale /= 100.0
+                }
+
+                let width = (img.get_width() as f32 * scale).round() as i32;
+                let height = (img.get_height() as f32 * scale).round() as i32;
+
+                let thumbnail = ops::thumbnail_image_with_opts(
+                    img,
+                    width,
+                    &ThumbnailImageOptions {
+                        height,
+                        crop: Interesting::None,
+                        ..Default::default()
+                    },
+                )
+                .wrap_err("Failed to apply proportion filter")?;
+
+                Ok(thumbnail)
             }
             _ => Ok(img.clone()),
         }
