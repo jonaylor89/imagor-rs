@@ -21,6 +21,7 @@ pub enum Filter {
     Label(LabelParams),
     MaxBytes(usize),
     MaxFrames(usize),
+    Modulate(u32, u32, u32),
     Orient(i32),
     Page(usize),
     Dpi(u32),
@@ -266,6 +267,37 @@ impl Filter {
                 ops::linear(img, alpha.as_mut_slice(), beta.as_mut_slice())
                     .map_err(|e| eyre::eyre!("Failed to apply contrast filter: {}", e))
             }
+            Filter::Modulate(brightness, saturation, hue) => {
+                let b = 1.0 + (*brightness as f64) / 100.0;
+                let s = 1.0 + (*saturation as f64) / 100.0;
+                let h = *hue as f64;
+
+                let colorspace = match img.get_interpretation()? {
+                    ops::Interpretation::Rgb => ops::Interpretation::Srgb,
+                    cs => cs,
+                };
+
+                let mut multiplications: Vec<f64> = if img.image_hasalpha() {
+                    vec![b, s, 1.0, 1.0]
+                } else {
+                    vec![b, s, 1.0]
+                };
+                let mut additions: Vec<f64> = if img.image_hasalpha() {
+                    vec![0.0, 0.0, h, 0.0]
+                } else {
+                    vec![0.0, 0.0, h]
+                };
+
+                let colorspace_img = ops::colourspace(img, ops::Interpretation::Lch)?;
+                let linear_img = ops::linear(
+                    &colorspace_img,
+                    multiplications.as_mut_slice(),
+                    additions.as_mut_slice(),
+                )?;
+                let final_img = ops::colourspace(&linear_img, colorspace)?;
+
+                Ok(final_img)
+            }
             _ => Ok(img.clone()),
         }
     }
@@ -286,6 +318,7 @@ impl std::fmt::Display for Filter {
             Filter::Label(params) => write!(f, "label({:?})", params),
             Filter::MaxBytes(value) => write!(f, "max_bytes({})", value),
             Filter::MaxFrames(value) => write!(f, "max_frames({})", value),
+            Filter::Modulate(b, s, h) => write!(f, "modulate({}, {}, {})", b, s, h),
             Filter::Orient(value) => write!(f, "orient({})", value),
             Filter::Page(value) => write!(f, "page({})", value),
             Filter::Dpi(value) => write!(f, "dpi({})", value),
