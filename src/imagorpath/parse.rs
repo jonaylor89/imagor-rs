@@ -349,6 +349,11 @@ fn parse_filter(input: &str) -> IResult<&str, Filter, VerboseError<&str>> {
             })(args)?;
             (input, max_frames)
         }
+        "modulate" => {
+            let (_, modulate) =
+                map(parse_modulate_params, |(b, s, h)| Filter::Modulate(b, s, h))(args)?;
+            (input, modulate)
+        }
         "orient" => {
             let (_, orient) = map(nom::character::complete::i32, Filter::Orient)(args)?;
             (input, orient)
@@ -412,6 +417,20 @@ fn parse_filters(input: &str) -> IResult<&str, Vec<Filter>, VerboseError<&str>> 
         tag("filters:"),
         terminated(separated_list0(char(':'), parse_filter), opt(char('/'))),
     )(input)
+}
+
+fn parse_modulate_params(input: &str) -> IResult<&str, (u32, u32, u32), VerboseError<&str>> {
+    let (input, modulate) = separated_list1(char(','), nom::character::complete::u32)(input)?;
+    if modulate.len() != 3 {
+        Err(nom::Err::Error(VerboseError {
+            errors: vec![(
+                input,
+                VerboseErrorKind::Context("Modulate requires 3 values"),
+            )],
+        }))
+    } else {
+        Ok((input, (modulate[0], modulate[1], modulate[2])))
+    }
 }
 
 fn parse_rgb(input: &str) -> IResult<&str, (i32, i32, i32), VerboseError<&str>> {
