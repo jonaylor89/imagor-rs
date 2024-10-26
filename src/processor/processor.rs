@@ -13,7 +13,6 @@ use libvips::{
     ops::{self, Direction, Interesting, Size, ThumbnailBufferOptions, ThumbnailImageOptions},
     VipsApp, VipsImage,
 };
-use metrics::IntoF64;
 use tracing::{debug, error};
 
 use super::image::{Image, ProcessError};
