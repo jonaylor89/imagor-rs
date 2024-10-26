@@ -11,8 +11,8 @@ use color_eyre::{
 };
 use libvips::{
     ops::{
-        self, Composite2Options, Direction, EmbedOptions, FlattenOptions, Interesting, Size,
-        TextOptions, ThumbnailImageOptions,
+        self, Composite2Options, Direction, EmbedOptions, FlattenOptions, Interesting,
+        SharpenOptions, Size, TextOptions, ThumbnailImageOptions,
     },
     VipsImage,
 };
@@ -435,10 +435,42 @@ impl Image {
                 todo!()
             }
             Filter::Blur(blur) => {
-                todo!()
+                if self.is_animated() {
+                    return Ok(self.to_owned());
+                }
+
+                let sigma = blur.0 as f64;
+
+                if sigma > 0.0 {
+                    return ops::gaussblur(&self.0, sigma)
+                        .map_err(|e| eyre::eyre!("Failed to apply blur filter: {}", e))
+                        .map(Self);
+                }
+
+                Ok(self.to_owned())
             }
             Filter::Sharpen(sharpen) => {
-                todo!()
+                if self.is_animated() {
+                    return Ok(self.to_owned());
+                }
+
+                let sigma = (1.0 + sharpen.0 * 2.0) as f64;
+
+                if sigma <= 0.0 {
+                    return Ok(self.to_owned());
+                }
+
+                ops::sharpen_with_opts(
+                    &self.0,
+                    &SharpenOptions {
+                        sigma,
+                        x_1: 1.0,
+                        m_1: 2.0,
+                        ..Default::default()
+                    },
+                )
+                .map_err(|e| eyre::eyre!("Failed to apply sharpen filter: {}", e))
+                .map(Self)
             }
             Filter::StripIcc => {
                 todo!()
