@@ -23,7 +23,7 @@ use tracing::{debug, error};
 
 pub trait ImageProcessor: Send + Sync {
     fn startup(&self) -> Result<()>;
-    fn process(&self, blob: &Blob, params: &Params) -> Result<Vec<u8>>;
+    fn process(&self, blob: &Blob, params: &Params) -> Result<Blob>;
     fn shutdown(&self) -> Result<()>;
 }
 
@@ -97,7 +97,7 @@ impl ImageProcessor for Processor {
     }
 
     #[tracing::instrument(skip(self))]
-    fn process(&self, blob: &Blob, params: &Params) -> Result<Vec<u8>> {
+    fn process(&self, blob: &Blob, params: &Params) -> Result<Blob> {
         let processing_params = self.preprocess(blob, params);
         let img = self.load_image(blob, params, &processing_params)?;
         let img = img.apply_orientation(processing_params.orient)?;
@@ -443,7 +443,7 @@ impl Processor {
     }
 
     #[tracing::instrument(skip(self, img, params))]
-    fn export(&self, img: &Image, params: &ProcessingParams) -> Result<Vec<u8>> {
+    fn export(&self, img: &Image, params: &ProcessingParams) -> Result<Blob> {
         let format = params.format.unwrap_or(ImageType::JPEG);
 
         let mut options = ExportOptions {
@@ -456,7 +456,7 @@ impl Processor {
         };
 
         loop {
-            let buf = match format {
+            let buf: Blob = match format {
                 ImageType::PNG => ops::pngsave_buffer_with_opts(
                     img.as_inner(),
                     &PngsaveBufferOptions {
@@ -466,22 +466,37 @@ impl Processor {
                         q: options.quality.unwrap_or(75),
                         ..Default::default()
                     },
-                )?,
+                )
+                .map(|b| Blob {
+                    data: b,
+                    content_type: format.to_content_type(),
+                })?,
                 ImageType::WEBP => ops::webpsave_buffer_with_opts(
                     img.as_inner(),
                     &WebpsaveBufferOptions {
                         q: options.quality.unwrap_or(75),
                         ..Default::default()
                     },
-                )?,
+                )
+                .map(|b| Blob {
+                    data: b,
+                    content_type: format.to_content_type(),
+                })?,
                 ImageType::TIFF => ops::tiffsave_buffer_with_opts(
                     img.as_inner(),
                     &TiffsaveBufferOptions {
                         q: options.quality.unwrap_or(75),
                         ..Default::default()
                     },
-                )?,
-                ImageType::GIF => ops::gifsave_buffer(img.as_inner())?,
+                )
+                .map(|b| Blob {
+                    data: b,
+                    content_type: format.to_content_type(),
+                })?,
+                ImageType::GIF => ops::gifsave_buffer(img.as_inner()).map(|b| Blob {
+                    data: b,
+                    content_type: format.to_content_type(),
+                })?,
                 ImageType::AVIF => ops::heifsave_buffer_with_opts(
                     img.as_inner(),
                     &HeifsaveBufferOptions {
@@ -489,7 +504,11 @@ impl Processor {
                         compression: ForeignHeifCompression::Av1,
                         ..Default::default()
                     },
-                )?,
+                )
+                .map(|b| Blob {
+                    data: b,
+                    content_type: format.to_content_type(),
+                })?,
                 ImageType::HEIF => ops::heifsave_buffer_with_opts(
                     img.as_inner(),
                     &HeifsaveBufferOptions {
@@ -497,7 +516,11 @@ impl Processor {
                         compression: ForeignHeifCompression::Hevc,
                         ..Default::default()
                     },
-                )?,
+                )
+                .map(|b| Blob {
+                    data: b,
+                    content_type: format.to_content_type(),
+                })?,
                 _ => {
                     // Default to JPEG
                     ops::jpegsave_buffer_with_opts(
@@ -510,7 +533,11 @@ impl Processor {
                             quant_table: 3,
                             ..Default::default()
                         },
-                    )?
+                    )
+                    .map(|b| Blob {
+                        data: b,
+                        content_type: ImageType::JPEG.to_content_type(),
+                    })?
                 }
             };
 
@@ -519,7 +546,7 @@ impl Processor {
                 && (options.quality.unwrap_or(0) > 10 || options.quality.is_none())
                 && format != ImageType::PNG
             {
-                let len = buf.len();
+                let len = buf.data.len();
                 debug!(
                     "max_bytes check: bytes={}, quality={:?}",
                     len, options.quality

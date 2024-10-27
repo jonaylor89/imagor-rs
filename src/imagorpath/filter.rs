@@ -89,6 +89,10 @@ pub enum ImageType {
 }
 
 impl ImageType {
+    pub fn to_content_type(&self) -> String {
+        return format!("image/{}", self.to_string().to_lowercase());
+    }
+
     pub fn is_animation_supported(&self) -> bool {
         matches!(self, ImageType::GIF | ImageType::WEBP)
     }
