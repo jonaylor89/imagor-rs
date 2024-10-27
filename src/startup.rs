@@ -9,6 +9,7 @@ use axum::{middleware, Json};
 use axum::{serve::Serve, Router};
 use color_eyre::eyre::WrapErr;
 use color_eyre::Result;
+use libvips::VipsApp;
 use std::future::ready;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -18,17 +19,25 @@ use tracing::{info, info_span};
 pub struct Application {
     port: u16,
     server: Serve<Router, Router>,
+
+    // This is a hack to keep the VipsApp alive for the lifetime of the application
+    _vips_app: VipsApp,
 }
 
 impl Application {
     pub async fn build(port: u16) -> Result<Self> {
+        let _vips_app = VipsApp::new("imagor_rs", true).wrap_err("Failed to initialize VipsApp")?;
         let listener = TcpListener::bind(format!("0.0.0.0:{}", port)).await.wrap_err(
             "Failed to bind to the port. Make sure you have the correct permissions to bind to the port",
         )?;
 
         let server = run(listener).await?;
 
-        Ok(Self { port, server })
+        Ok(Self {
+            port,
+            server,
+            _vips_app,
+        })
     }
 
     pub fn port(&self) -> u16 {

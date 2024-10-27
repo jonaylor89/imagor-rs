@@ -1,22 +1,28 @@
-use std::time::Instant;
+use std::{thread::available_parallelism, time::Instant};
 
 use crate::{
     imagorpath::{
         color::Color,
         filter::{Filter, ImageType},
         params::{Fit, HAlign, Params, VAlign},
+        type_utils::F32,
     },
     storage::storage::Blob,
 };
 use color_eyre::Result;
 use libvips::{
-    ops::{self, Interesting, Size, ThumbnailBufferOptions},
+    ops::{
+        self, ForeignHeifCompression, ForeignPngFilter, GifsaveBufferOptions,
+        HeifsaveBufferOptions, Interesting, JpegsaveBufferOptions, PngsaveBufferOptions, Size,
+        ThumbnailBufferOptions, TiffsaveBufferOptions, WebpsaveBufferOptions,
+    },
     VipsApp, VipsImage,
 };
 use tracing::{debug, error};
 
 use super::image::{Image, ProcessError};
 
+#[derive(Debug, Default)]
 pub struct Processor {
     disable_blur: bool,
     disable_filters: Vec<Filter>,
@@ -31,7 +37,6 @@ pub struct Processor {
     max_animation_frames: usize,
     strip_metadata: bool,
     avif_speed: i32,
-    vips_app: VipsApp,
 }
 
 #[derive(Clone, Debug)]
@@ -58,7 +63,47 @@ pub struct FocalPoint {
     pub bottom: f32,
 }
 
+#[derive(Debug)]
+pub struct ProcessorOptions {
+    disable_blur: bool,
+    disabled_filters: Vec<Filter>,
+    concurrency: Option<i32>,
+}
+
+#[derive(Debug)]
+struct ExportOptions {
+    quality: Option<i32>,
+    compression: Option<i32>,
+    palette: bool,
+    bitdepth: Option<i32>,
+    strip_metadata: bool,
+    max_bytes: usize,
+}
+
 impl Processor {
+    pub fn new(p_options: ProcessorOptions) -> Self {
+        let mut disabled_filters = p_options.disabled_filters;
+        if p_options.disable_blur {
+            disabled_filters.push(Filter::Blur(F32(0.0)));
+        }
+
+        let concurrency = p_options.concurrency.unwrap_or_else(|| {
+            let default_parallelism_approx = available_parallelism().unwrap().get();
+            if default_parallelism_approx > 1 {
+                default_parallelism_approx as i32
+            } else {
+                1
+            }
+        });
+
+        Processor {
+            disable_blur: p_options.disable_blur,
+            disable_filters: disabled_filters,
+            concurrency,
+            ..Default::default()
+        }
+    }
+
     #[tracing::instrument(skip(self))]
     pub fn startup(&self) -> Result<()> {
         Ok(())
@@ -70,21 +115,24 @@ impl Processor {
     }
 
     #[tracing::instrument(skip(self))]
-    pub fn process(&self, blob: &Blob, params: &Params) -> Result<()> {
+    pub fn process(&self, blob: &Blob, params: &Params) -> Result<Vec<u8>> {
         let processing_params = self.preprocess(blob, params);
         let img = self.load_image(blob, params, &processing_params)?;
         let img = img.apply_orientation(processing_params.orient)?;
         let (width, height) = img.calculate_dimensions(params, processing_params.upscale);
         let img = img.resize_image(width, height, params.fit, processing_params.upscale, params)?;
         let img = img.apply_flip(params.h_flip, params.v_flip)?;
+        let filted_img = self.apply_filters(img, params, &processing_params)?;
 
-        // TODO: Apply filters
-        let _filted_img = self.apply_filters(img, params, &processing_params);
+        // if p.Meta {
+        //     // metadata without export
+        //     return imagor.NewBlobFromJsonMarshal(metadata(img, format, stripExif)), nil
+        // }
+        // format = supportedSaveFormat(format) // convert to supported export format
 
-        // let export_ready = self.export(&processed_image, _params)?;
+        let exportable_bytes = self.export(&filted_img, &processing_params)?;
 
-        // Ok(export_ready)
-        Ok(())
+        Ok(exportable_bytes)
     }
 
     #[tracing::instrument(skip(self))]
@@ -385,5 +433,106 @@ impl Processor {
         });
 
         Ok(filtered)
+    }
+
+    #[tracing::instrument(skip(self, img, params))]
+    fn export(&self, img: &Image, params: &ProcessingParams) -> Result<Vec<u8>> {
+        let format = params.format.unwrap_or(ImageType::JPEG);
+
+        let mut options = ExportOptions {
+            quality: None, // Set from params if needed
+            compression: None,
+            palette: false,
+            bitdepth: None,
+            strip_metadata: params.strip_metadata,
+            max_bytes: params.max_bytes,
+        };
+
+        loop {
+            let buf = match format {
+                ImageType::PNG => ops::pngsave_buffer_with_opts(
+                    img.as_inner(),
+                    &PngsaveBufferOptions {
+                        compression: options.compression.unwrap_or(6),
+                        filter: ForeignPngFilter::None,
+                        palette: options.palette,
+                        q: options.quality.unwrap_or(75),
+                        ..Default::default()
+                    },
+                )?,
+                ImageType::WEBP => ops::webpsave_buffer_with_opts(
+                    img.as_inner(),
+                    &WebpsaveBufferOptions {
+                        q: options.quality.unwrap_or(75),
+                        ..Default::default()
+                    },
+                )?,
+                ImageType::TIFF => ops::tiffsave_buffer_with_opts(
+                    img.as_inner(),
+                    &TiffsaveBufferOptions {
+                        q: options.quality.unwrap_or(75),
+                        ..Default::default()
+                    },
+                )?,
+                ImageType::GIF => ops::gifsave_buffer(img.as_inner())?,
+                ImageType::AVIF => ops::heifsave_buffer_with_opts(
+                    img.as_inner(),
+                    &HeifsaveBufferOptions {
+                        q: options.quality.unwrap_or(75),
+                        compression: ForeignHeifCompression::Av1,
+                        ..Default::default()
+                    },
+                )?,
+                ImageType::HEIF => ops::heifsave_buffer_with_opts(
+                    img.as_inner(),
+                    &HeifsaveBufferOptions {
+                        q: options.quality.unwrap_or(75),
+                        compression: ForeignHeifCompression::Hevc,
+                        ..Default::default()
+                    },
+                )?,
+                _ => {
+                    // Default to JPEG
+                    ops::jpegsave_buffer_with_opts(
+                        img.as_inner(),
+                        &JpegsaveBufferOptions {
+                            q: options.quality.unwrap_or(75),
+                            optimize_coding: true,
+                            interlace: true,
+                            trellis_quant: true,
+                            quant_table: 3,
+                            ..Default::default()
+                        },
+                    )?
+                }
+            };
+
+            // Handle max bytes logic
+            if options.max_bytes > 0
+                && (options.quality.unwrap_or(0) > 10 || options.quality.is_none())
+                && format != ImageType::PNG
+            {
+                let len = buf.len();
+                debug!(
+                    "max_bytes check: bytes={}, quality={:?}",
+                    len, options.quality
+                );
+
+                if len > options.max_bytes {
+                    let current_quality = options.quality.unwrap_or(80);
+                    let delta = len as f64 / options.max_bytes as f64;
+
+                    options.quality = Some(match delta {
+                        d if d > 3.0 => current_quality * 25 / 100,
+                        d if d > 1.5 => current_quality * 50 / 100,
+                        _ => current_quality * 75 / 100,
+                    });
+
+                    continue;
+                }
+            }
+
+            return Ok(buf);
+        }
     }
 }
