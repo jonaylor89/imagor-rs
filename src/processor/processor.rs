@@ -1,5 +1,6 @@
 use std::{thread::available_parallelism, time::Instant};
 
+use super::image::{Image, ProcessError};
 use crate::{
     imagorpath::{
         color::Color,
@@ -12,15 +13,19 @@ use crate::{
 use color_eyre::Result;
 use libvips::{
     ops::{
-        self, ForeignHeifCompression, ForeignPngFilter, GifsaveBufferOptions,
-        HeifsaveBufferOptions, Interesting, JpegsaveBufferOptions, PngsaveBufferOptions, Size,
-        ThumbnailBufferOptions, TiffsaveBufferOptions, WebpsaveBufferOptions,
+        self, ForeignHeifCompression, ForeignPngFilter, HeifsaveBufferOptions, Interesting,
+        JpegsaveBufferOptions, PngsaveBufferOptions, Size, ThumbnailBufferOptions,
+        TiffsaveBufferOptions, WebpsaveBufferOptions,
     },
-    VipsApp, VipsImage,
+    VipsImage,
 };
 use tracing::{debug, error};
 
-use super::image::{Image, ProcessError};
+pub trait ImageProcessor: Send + Sync {
+    fn startup(&self) -> Result<()>;
+    fn process(&self, blob: &Blob, params: &Params) -> Result<Vec<u8>>;
+    fn shutdown(&self) -> Result<()>;
+}
 
 #[derive(Debug, Default)]
 pub struct Processor {
@@ -65,9 +70,9 @@ pub struct FocalPoint {
 
 #[derive(Debug)]
 pub struct ProcessorOptions {
-    disable_blur: bool,
-    disabled_filters: Vec<Filter>,
-    concurrency: Option<i32>,
+    pub disable_blur: bool,
+    pub disabled_filters: Vec<Filter>,
+    pub concurrency: Option<i32>,
 }
 
 #[derive(Debug)]
@@ -78,6 +83,39 @@ struct ExportOptions {
     bitdepth: Option<i32>,
     strip_metadata: bool,
     max_bytes: usize,
+}
+
+impl ImageProcessor for Processor {
+    #[tracing::instrument(skip(self))]
+    fn startup(&self) -> Result<()> {
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self))]
+    fn shutdown(&self) -> Result<()> {
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self))]
+    fn process(&self, blob: &Blob, params: &Params) -> Result<Vec<u8>> {
+        let processing_params = self.preprocess(blob, params);
+        let img = self.load_image(blob, params, &processing_params)?;
+        let img = img.apply_orientation(processing_params.orient)?;
+        let (width, height) = img.calculate_dimensions(params, processing_params.upscale);
+        let img = img.resize_image(width, height, params.fit, processing_params.upscale, params)?;
+        let img = img.apply_flip(params.h_flip, params.v_flip)?;
+        let filted_img = self.apply_filters(img, params, &processing_params)?;
+
+        // if p.Meta {
+        //     // metadata without export
+        //     return imagor.NewBlobFromJsonMarshal(metadata(img, format, stripExif)), nil
+        // }
+        // format = supportedSaveFormat(format) // convert to supported export format
+
+        let exportable_bytes = self.export(&filted_img, &processing_params)?;
+
+        Ok(exportable_bytes)
+    }
 }
 
 impl Processor {
@@ -102,37 +140,6 @@ impl Processor {
             concurrency,
             ..Default::default()
         }
-    }
-
-    #[tracing::instrument(skip(self))]
-    pub fn startup(&self) -> Result<()> {
-        Ok(())
-    }
-
-    #[tracing::instrument(skip(self))]
-    pub fn shutdown(&self) -> Result<()> {
-        Ok(())
-    }
-
-    #[tracing::instrument(skip(self))]
-    pub fn process(&self, blob: &Blob, params: &Params) -> Result<Vec<u8>> {
-        let processing_params = self.preprocess(blob, params);
-        let img = self.load_image(blob, params, &processing_params)?;
-        let img = img.apply_orientation(processing_params.orient)?;
-        let (width, height) = img.calculate_dimensions(params, processing_params.upscale);
-        let img = img.resize_image(width, height, params.fit, processing_params.upscale, params)?;
-        let img = img.apply_flip(params.h_flip, params.v_flip)?;
-        let filted_img = self.apply_filters(img, params, &processing_params)?;
-
-        // if p.Meta {
-        //     // metadata without export
-        //     return imagor.NewBlobFromJsonMarshal(metadata(img, format, stripExif)), nil
-        // }
-        // format = supportedSaveFormat(format) // convert to supported export format
-
-        let exportable_bytes = self.export(&filted_img, &processing_params)?;
-
-        Ok(exportable_bytes)
     }
 
     #[tracing::instrument(skip(self))]

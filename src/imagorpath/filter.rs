@@ -1,14 +1,4 @@
 use crate::imagorpath::{color::Color, type_utils::F32};
-use color_eyre::{
-    eyre::{self, Context},
-    Result,
-};
-use libvips::{
-    ops::{
-        self, Composite2Options, FlattenOptions, Interesting, TextOptions, ThumbnailImageOptions,
-    },
-    VipsImage,
-};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 

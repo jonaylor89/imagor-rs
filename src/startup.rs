@@ -1,5 +1,6 @@
 use crate::imagorpath::{normalize::SafeCharsType, params::Params};
 use crate::metrics::{setup_metrics_recorder, track_metrics};
+use crate::processor::processor::{Processor, ProcessorOptions};
 use crate::state::AppStateDyn;
 use crate::storage::file::FileStorage;
 use axum::extract::{MatchedPath, Request, State};
@@ -57,8 +58,14 @@ async fn run(listener: TcpListener) -> Result<Serve<Router, Router>> {
         "images_dir".into(),
         SafeCharsType::Default,
     );
+    let processor = Processor::new(ProcessorOptions {
+        disable_blur: false,
+        disabled_filters: vec![],
+        concurrency: None,
+    });
     let state = AppStateDyn {
         storage: Arc::new(storage.clone()),
+        processor: Arc::new(processor),
     };
 
     let app = Router::new()
@@ -106,14 +113,14 @@ async fn handler(
         StatusCode::BAD_REQUEST,
         "Image parameter is missing".to_string(),
     ))?;
-    let _img_data = state.storage.get(img).await.map_err(|e| {
+    let img_data = state.storage.get(img).await.map_err(|e| {
         (
             StatusCode::NOT_FOUND,
             format!("Failed to fetch image: {}", e),
         )
     })?;
 
-    // apply transforms
+    let _output_bytes = state.processor.process(&img_data, &params);
 
     // TODO: save image to cache
 
