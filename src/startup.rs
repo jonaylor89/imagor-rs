@@ -3,10 +3,12 @@ use crate::metrics::{setup_metrics_recorder, track_metrics};
 use crate::processor::processor::{Processor, ProcessorOptions};
 use crate::state::AppStateDyn;
 use crate::storage::file::FileStorage;
+use axum::body::Body;
 use axum::extract::{MatchedPath, Request, State};
-use axum::http::StatusCode;
+use axum::http::{header, Response, StatusCode};
+use axum::middleware;
+use axum::response::IntoResponse;
 use axum::routing::get;
-use axum::{middleware, Json};
 use axum::{serve::Serve, Router};
 use color_eyre::eyre::WrapErr;
 use color_eyre::Result;
@@ -100,10 +102,7 @@ async fn run(listener: TcpListener) -> Result<Serve<Router, Router>> {
 }
 
 #[tracing::instrument(skip(state))]
-async fn handler(
-    State(state): State<AppStateDyn>,
-    params: Params,
-) -> Result<Json<Params>, (StatusCode, String)> {
+async fn handler(State(state): State<AppStateDyn>, params: Params) -> impl IntoResponse {
     info!("params: {:?}", params);
 
     // TODO: check cache for image and serve if found
@@ -113,6 +112,7 @@ async fn handler(
         StatusCode::BAD_REQUEST,
         "Image parameter is missing".to_string(),
     ))?;
+
     let img_data = state.storage.get(img).await.map_err(|e| {
         (
             StatusCode::NOT_FOUND,
@@ -120,13 +120,24 @@ async fn handler(
         )
     })?;
 
-    let _output_bytes = state.processor.process(&img_data, &params);
+    let output_blob = state.processor.process(&img_data, &params).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to process image: {}", e),
+        )
+    })?;
 
     // TODO: save image to cache
 
-    // return image
-
-    Ok(Json(params))
+    Response::builder()
+        .header(header::CONTENT_TYPE, output_blob.content_type)
+        .body(Body::from(output_blob.data))
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to build response: {}", e),
+            )
+        })
 }
 
 #[tracing::instrument]
