@@ -864,6 +864,7 @@ dependencies = [
  "sha1",
  "thiserror",
  "tokio",
+ "tokio-util",
  "tower-http",
  "tracing",
  "tracing-bunyan-formatter",
