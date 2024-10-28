@@ -7,9 +7,9 @@ use crate::storage::storage::Blob;
 use axum::body::Body;
 use axum::extract::{MatchedPath, Request, State};
 use axum::http::{header, Response, StatusCode};
-use axum::middleware;
 use axum::response::IntoResponse;
 use axum::routing::get;
+use axum::{middleware, Json};
 use axum::{serve::Serve, Router};
 use color_eyre::eyre::WrapErr;
 use color_eyre::Result;
@@ -78,6 +78,7 @@ async fn run(listener: TcpListener) -> Result<Serve<Router, Router>> {
         .route("/health", get(health_check))
         .route("/metrics", get(move || ready(recorder_handle.render())))
         .route("/", get(root))
+        .route("/params/*imagorpath", get(params))
         .route("/*imagorpath", get(handler))
         .layer(
             TraceLayer::new_for_http().make_span_with(|request: &Request<_>| {
@@ -175,6 +176,16 @@ async fn handler(
                 format!("Failed to build response: {}", e),
             )
         })
+}
+
+#[tracing::instrument(skip(state))]
+async fn params(
+    State(state): State<AppStateDyn>,
+    params: Params,
+) -> Result<Json<Params>, (StatusCode, String)> {
+    info!("params: {:?}", params);
+
+    Ok(Json(params))
 }
 
 #[tracing::instrument]
