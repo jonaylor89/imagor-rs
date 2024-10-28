@@ -96,7 +96,7 @@ impl ImageProcessor for Processor {
         Ok(())
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self, blob))]
     fn process(&self, blob: &Blob, params: &Params) -> Result<Blob> {
         let processing_params = self.preprocess(blob, params);
         let img = self.load_image(blob, params, &processing_params)?;
@@ -104,7 +104,8 @@ impl ImageProcessor for Processor {
         let (width, height) = img.calculate_dimensions(params, processing_params.upscale);
         let img = img.resize_image(width, height, params.fit, processing_params.upscale, params)?;
         let img = img.apply_flip(params.h_flip, params.v_flip)?;
-        let filted_img = self.apply_filters(img, params, &processing_params)?;
+
+        let img = self.apply_filters(img, params, &processing_params)?;
 
         // if p.Meta {
         //     // metadata without export
@@ -112,7 +113,7 @@ impl ImageProcessor for Processor {
         // }
         // format = supportedSaveFormat(format) // convert to supported export format
 
-        let exportable_bytes = self.export(&filted_img, &processing_params)?;
+        let exportable_bytes = self.export(&img, &processing_params)?;
 
         Ok(exportable_bytes)
     }
@@ -142,7 +143,7 @@ impl Processor {
         }
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self, blob))]
     fn preprocess(&self, blob: &Blob, params: &Params) -> ProcessingParams {
         let initial_params = ProcessingParams {
             thumbnail_not_supported: params.trim,
@@ -425,7 +426,7 @@ impl Processor {
             }
 
             let start = Instant::now();
-            let new_image = img.apply(filter);
+            let new_image = img.apply(filter, params);
             let elapsed = start.elapsed().as_millis();
 
             debug!("filter |{}| took {}", filter, elapsed);

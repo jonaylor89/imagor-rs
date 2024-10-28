@@ -3,6 +3,7 @@ use crate::metrics::{setup_metrics_recorder, track_metrics};
 use crate::processor::processor::{Processor, ProcessorOptions};
 use crate::state::AppStateDyn;
 use crate::storage::file::FileStorage;
+use crate::storage::storage::Blob;
 use axum::body::Body;
 use axum::extract::{MatchedPath, Request, State};
 use axum::http::{header, Response, StatusCode};
@@ -13,6 +14,7 @@ use axum::{serve::Serve, Router};
 use color_eyre::eyre::WrapErr;
 use color_eyre::Result;
 use libvips::VipsApp;
+use reqwest;
 use std::future::ready;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -102,7 +104,10 @@ async fn run(listener: TcpListener) -> Result<Serve<Router, Router>> {
 }
 
 #[tracing::instrument(skip(state))]
-async fn handler(State(state): State<AppStateDyn>, params: Params) -> impl IntoResponse {
+async fn handler(
+    State(state): State<AppStateDyn>,
+    params: Params,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
     info!("params: {:?}", params);
 
     // TODO: check cache for image and serve if found
@@ -113,14 +118,44 @@ async fn handler(State(state): State<AppStateDyn>, params: Params) -> impl IntoR
         "Image parameter is missing".to_string(),
     ))?;
 
-    let img_data = state.storage.get(img).await.map_err(|e| {
-        (
-            StatusCode::NOT_FOUND,
-            format!("Failed to fetch image: {}", e),
-        )
-    })?;
+    // TODO: add config in the config to allow/disallow fetching images from the internet
+    let blob = if img.starts_with("https://") || img.starts_with("http://") {
+        let raw_bytes = reqwest::get(img)
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::NOT_FOUND,
+                    format!("Failed to fetch image: {}", e),
+                )
+            })?
+            .bytes()
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to fetch image: {}", e),
+                )
+            })?
+            .to_vec();
 
-    let output_blob = state.processor.process(&img_data, &params).map_err(|e| {
+        let content_type = infer::get(&raw_bytes)
+            .map(|mime| mime.to_string())
+            .unwrap_or("image/jpeg".to_string());
+
+        Blob {
+            data: raw_bytes,
+            content_type,
+        }
+    } else {
+        state.storage.get(img).await.map_err(|e| {
+            (
+                StatusCode::NOT_FOUND,
+                format!("Failed to fetch image: {}", e),
+            )
+        })?
+    };
+
+    let blob = state.processor.process(&blob, &params).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to process image: {}", e),
@@ -130,8 +165,8 @@ async fn handler(State(state): State<AppStateDyn>, params: Params) -> impl IntoR
     // TODO: save image to cache
 
     Response::builder()
-        .header(header::CONTENT_TYPE, output_blob.content_type)
-        .body(Body::from(output_blob.data))
+        .header(header::CONTENT_TYPE, blob.content_type)
+        .body(Body::from(blob.data))
         .map_err(|e| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,

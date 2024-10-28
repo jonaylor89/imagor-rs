@@ -20,6 +20,8 @@ use metrics::IntoF64;
 use thiserror::Error;
 use tracing::instrument;
 
+use super::processor::ProcessingParams;
+
 #[derive(Error, Debug)]
 pub enum ProcessError {
     #[error("Image processing failed: {0}")]
@@ -68,6 +70,7 @@ impl Image {
         }
     }
 
+    #[instrument(skip(self))]
     pub fn calculate_dimensions(&self, params: &Params, upscale: bool) -> (i32, i32) {
         match (params.width, params.height) {
             (None, None) => (self.0.get_width(), self.0.get_page_height()),
@@ -97,6 +100,7 @@ impl Image {
         }
     }
 
+    #[instrument(skip(self))]
     pub fn resize_image(
         &self,
         width: i32,
@@ -132,6 +136,7 @@ impl Image {
         }
     }
 
+    #[instrument(skip(self))]
     pub fn apply_flip(&self, h_flip: bool, v_flip: bool) -> Result<Self, ProcessError> {
         let flipped = if h_flip {
             &ops::flip(&self.0, Direction::Horizontal).map_err(|_| {
@@ -153,7 +158,7 @@ impl Image {
     }
 
     #[tracing::instrument(skip(self))]
-    pub fn apply(&self, filter: &Filter) -> Result<Self> {
+    pub fn apply(&self, filter: &Filter, params: &Params) -> Result<Self> {
         // Apply the filter to the imag
         match filter {
             Filter::RoundCorner(params) => {
@@ -509,6 +514,15 @@ impl Image {
 
                 Ok(Self(thumbnail))
             }
+            Filter::Fill(color) => self.fill(
+                self.0.get_width(),
+                self.0.get_height(),
+                params.padding_left.unwrap_or(0),
+                params.padding_top.unwrap_or(0),
+                params.padding_right.unwrap_or(0),
+                params.padding_bottom.unwrap_or(0),
+                color,
+            ),
             _ => Ok(self.to_owned()),
         }
     }

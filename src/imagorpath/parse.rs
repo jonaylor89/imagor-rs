@@ -786,4 +786,25 @@ mod tests {
         let result = parse_filters(input).unwrap();
         assert_eq!(result, expected);
     }
+
+    #[test]
+    fn test_parse_path_from_example() {
+        let input = "unsafe/fit-in/-180x180/filters:hue(290):saturation(100):fill(yellow)/https://raw.githubusercontent.com/cshum/imagor/master/testdata/gopher.png";
+        let expected = Params {
+            path: Some("unsafe/fit-in/-180x180/filters:hue(290):saturation(100):fill(yellow)/https://raw.githubusercontent.com/cshum/imagor/master/testdata/gopher.png".to_string()),
+            image: Some("https://raw.githubusercontent.com/cshum/imagor/master/testdata/gopher.png".to_string()),
+            width: Some(180),
+            height: Some(180),
+            h_flip: true,
+            fit: Some(Fit::FitIn),
+            filters: vec![
+                Filter::Hue(F32(290.0)),
+                Filter::Saturation(F32(100.0)),
+                Filter::Fill(Color::Named(NamedColor::Yellow)),
+            ],
+            ..Default::default()
+        };
+        let (_, result) = parse_path(input).unwrap();
+        assert_eq!(result, expected);
+    }
 }
