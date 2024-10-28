@@ -11,6 +11,7 @@ use crate::{
     storage::storage::Blob,
 };
 use color_eyre::Result;
+use infer::Type;
 use libvips::{
     ops::{
         self, ForeignHeifCompression, ForeignPngFilter, HeifsaveBufferOptions, Interesting,
@@ -113,7 +114,24 @@ impl ImageProcessor for Processor {
         // }
         // format = supportedSaveFormat(format) // convert to supported export format
 
-        let exportable_bytes = self.export(&img, &processing_params)?;
+        let inferred_format: Option<ImageType> =
+            infer::get(&blob.data).map(|t| match t.mime_type() {
+                "image/png" => ImageType::PNG,
+                "image/jpeg" => ImageType::JPEG,
+                "image/jpg" => ImageType::JPEG,
+                "image/webp" => ImageType::WEBP,
+                "image/gif" => ImageType::GIF,
+                "image/tiff" => ImageType::TIFF,
+                "image/heic" => ImageType::HEIF,
+                "image/avif" => ImageType::AVIF,
+                "image/bmp" => ImageType::BMP,
+                "image/jp2" => ImageType::JP2K,
+                "image/svg+xml" => ImageType::SVG,
+                "image/magick" => ImageType::MAGICK,
+                "application/pdf" => ImageType::PDF,
+                _ => ImageType::JPEG,
+            });
+        let exportable_bytes = self.export(&img, &processing_params, inferred_format)?;
 
         Ok(exportable_bytes)
     }
@@ -290,9 +308,9 @@ impl Processor {
                             ..Default::default()
                         },
                     )
-                    .map_err(|_| {
+                    .map_err(|e| {
                         ProcessError::ImageProcessingError(
-                            "Failed to create thumbnail for fit_in".into(),
+                            format!("Failed to create thumbnail for fit_in {:?}", e).into(),
                         )
                     })
                 }
@@ -306,9 +324,9 @@ impl Processor {
                         ..Default::default()
                     },
                 )
-                .map_err(|_| {
+                .map_err(|e| {
                     ProcessError::ImageProcessingError(
-                        "Failed to create thumbnail for stretch".into(),
+                        format!("Failed to create thumbnail for stretch {:?}", e).into(),
                     )
                 }),
 
@@ -351,9 +369,9 @@ impl Processor {
                         ..Default::default()
                     },
                 )
-                .map_err(|_| {
+                .map_err(|e| {
                     ProcessError::ImageProcessingError(
-                        "Failed to create width-only thumbnail".into(),
+                        format!("Failed to create width-only thumbnail {:?}", e).into(),
                     )
                 }),
 
@@ -367,9 +385,9 @@ impl Processor {
                         ..Default::default()
                     },
                 )
-                .map_err(|_| {
+                .map_err(|e| {
                     ProcessError::ImageProcessingError(
-                        "Failed to create height-only thumbnail".into(),
+                        format!("Failed to create height-only thumbnail {:?}", e).into(),
                     )
                 }),
 
@@ -382,7 +400,14 @@ impl Processor {
 
         // If we couldn't create a thumbnail, load the full image
         let img = if processing_params.thumbnail_not_supported {
-            VipsImage::new_from_buffer(blob.as_ref(), "").map_err(|_| ProcessError::ImageLoadError)
+            VipsImage::new_from_buffer(blob.as_ref(), "").map_err(|e| {
+                debug!(
+                    "failed to create image from buffer of size {} - {}",
+                    blob.as_ref().len(),
+                    e
+                );
+                ProcessError::ImageLoadError
+            })
         } else {
             ops::thumbnail_buffer_with_opts(
                 blob.as_ref(),
@@ -394,8 +419,15 @@ impl Processor {
                     ..Default::default()
                 },
             )
-            .map_err(|_| {
-                ProcessError::ImageProcessingError("Failed to create default thumbnail".into())
+            .map_err(|e| {
+                ProcessError::ImageProcessingError(
+                    format!(
+                        "Failed to create default thumbnail of buffer size {} - {}",
+                        blob.as_ref().len(),
+                        e
+                    )
+                    .into(),
+                )
             })
         };
 
@@ -444,7 +476,12 @@ impl Processor {
     }
 
     #[tracing::instrument(skip(self, img, params))]
-    fn export(&self, img: &Image, params: &ProcessingParams) -> Result<Blob> {
+    fn export(
+        &self,
+        img: &Image,
+        params: &ProcessingParams,
+        inferred: Option<ImageType>,
+    ) -> Result<Blob> {
         let format = params.format.unwrap_or(ImageType::JPEG);
 
         let mut options = ExportOptions {
