@@ -11,7 +11,6 @@ use crate::{
     storage::storage::Blob,
 };
 use color_eyre::Result;
-use infer::Type;
 use libvips::{
     ops::{
         self, ForeignHeifCompression, ForeignPngFilter, HeifsaveBufferOptions, Interesting,
@@ -156,6 +155,8 @@ impl Processor {
         Processor {
             disable_blur: p_options.disable_blur,
             disable_filters: disabled_filters,
+            max_width: 100_000,
+            max_height: 100_000,
             concurrency,
             ..Default::default()
         }

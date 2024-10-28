@@ -20,8 +20,6 @@ use metrics::IntoF64;
 use thiserror::Error;
 use tracing::instrument;
 
-use super::processor::ProcessingParams;
-
 #[derive(Error, Debug)]
 pub enum ProcessError {
     #[error("Image processing failed: {0}")]
