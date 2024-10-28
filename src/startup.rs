@@ -32,6 +32,8 @@ pub struct Application {
 impl Application {
     pub async fn build(port: u16) -> Result<Self> {
         let _vips_app = VipsApp::new("imagor_rs", true).wrap_err("Failed to initialize VipsApp")?;
+        _vips_app.concurrency_set(4);
+
         let listener = TcpListener::bind(format!("0.0.0.0:{}", port)).await.wrap_err(
             "Failed to bind to the port. Make sure you have the correct permissions to bind to the port",
         )?;

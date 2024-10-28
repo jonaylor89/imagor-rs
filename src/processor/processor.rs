@@ -19,7 +19,7 @@ use libvips::{
     },
     VipsImage,
 };
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 pub trait ImageProcessor: Send + Sync {
     fn startup(&self) -> Result<()>;
@@ -285,6 +285,16 @@ impl Processor {
         params: &Params,
         processing_params: &ProcessingParams,
     ) -> Result<Image, ProcessError> {
+        // Check if blob is valid
+        if blob.as_ref().is_empty() {
+            return Err(ProcessError::ImageLoadError);
+        }
+
+        // Try to get image format
+        if let Some(format) = infer::get(&blob.data) {
+            debug!("Detected image format: {}", format.mime_type());
+        }
+
         if !processing_params.thumbnail_not_supported
             && params.crop_bottom.is_none()
             && params.crop_top.is_none()
@@ -410,17 +420,18 @@ impl Processor {
                 ProcessError::ImageLoadError
             })
         } else {
-            ops::thumbnail_buffer_with_opts(
-                blob.as_ref(),
-                self.max_width,
-                &ThumbnailBufferOptions {
-                    height: self.max_height,
-                    crop: Interesting::None,
-                    size: Size::Down,
-                    ..Default::default()
-                },
-            )
-            .map_err(|e| {
+            // ops::thumbnail_buffer_with_opts(
+            //     blob.as_ref(),
+            //     self.max_width,
+            //     &ThumbnailBufferOptions {
+            //         height: self.max_height,
+            //         crop: Interesting::None,
+            //         size: Size::Down,
+            //         no_rotate: true, // Add this to prevent rotation issues
+            //         ..Default::default()
+            //     },
+            // )
+            ops::thumbnail_buffer(blob.as_ref(), 100).map_err(|e| {
                 ProcessError::ImageProcessingError(
                     format!(
                         "Failed to create default thumbnail of buffer size {} - {}",
@@ -483,7 +494,7 @@ impl Processor {
         params: &ProcessingParams,
         inferred: Option<ImageType>,
     ) -> Result<Blob> {
-        let format = params.format.unwrap_or(ImageType::JPEG);
+        let format = params.format.unwrap_or(inferred.unwrap_or(ImageType::JPEG));
 
         let mut options = ExportOptions {
             quality: None, // Set from params if needed
@@ -607,5 +618,59 @@ impl Processor {
 
             return Ok(buf);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::{ImageBuffer, Rgb};
+    use libvips::VipsApp;
+    use rand::Rng;
+
+    #[test]
+    fn test_basic_image_load() {
+        let _vips_app = VipsApp::new("imagor_rs test", true).expect("Failed to initialize VipsApp");
+        _vips_app.concurrency_set(4);
+
+        // Create a 100x100 random RGB image
+        let width = 100u32;
+        let height = 100u32;
+        let mut rng = rand::thread_rng();
+
+        let img_buf: ImageBuffer<Rgb<u8>, Vec<u8>> =
+            ImageBuffer::from_fn(width, height, |_x, _y| {
+                Rgb([
+                    rng.gen_range(0..255),
+                    rng.gen_range(0..255),
+                    rng.gen_range(0..255),
+                ])
+            });
+
+        // Convert to JPEG
+        let mut jpeg_data = Vec::new();
+        img_buf
+            .write_to(
+                &mut std::io::Cursor::new(&mut jpeg_data),
+                image::ImageFormat::Jpeg,
+            )
+            .expect("Failed to create JPEG");
+
+        // Create blob
+        let blob = Blob {
+            data: jpeg_data,
+            content_type: "image/jpeg".to_string(),
+        };
+
+        let processor = Processor::new(ProcessorOptions {
+            disable_blur: false,
+            disabled_filters: vec![],
+            concurrency: Some(1),
+        });
+
+        let params = Params::default();
+        let result = processor.process(&blob, &params);
+
+        assert!(result.is_ok());
     }
 }
