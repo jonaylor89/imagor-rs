@@ -1,3 +1,4 @@
+use crate::imagorpath::hasher::verify_hash;
 use crate::imagorpath::{normalize::SafeCharsType, params::Params};
 use crate::metrics::{setup_metrics_recorder, track_metrics};
 use crate::processor::processor::{Processor, ProcessorOptions};
@@ -113,6 +114,15 @@ async fn handler(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     info!("params: {:?}", params);
 
+    if let (Some(hash), Some(path)) = (&params.hash, &params.path) {
+        verify_hash(hash.to_owned().into(), path.to_owned().into()).map_err(|e| {
+            (
+                StatusCode::BAD_REQUEST,
+                format!("Failed to verify hash: {}", e),
+            )
+        })?;
+    }
+
     // TODO: check cache for image and serve if found
 
     // if image is not in cache, fetch image
@@ -179,10 +189,7 @@ async fn handler(
 }
 
 #[tracing::instrument(skip(state))]
-async fn params(
-    State(state): State<AppStateDyn>,
-    params: Params,
-) -> Result<Json<Params>, (StatusCode, String)> {
+async fn params(params: Params) -> Result<Json<Params>, (StatusCode, String)> {
     info!("params: {:?}", params);
 
     Ok(Json(params))

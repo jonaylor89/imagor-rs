@@ -12,7 +12,7 @@ imagor but in rust (mostly for self-learning purposes)
 - [x] process images (with vips)
 - [x] serve processed images
 - [ ] enforce auth on main route
-- [ ] add cache
+- [ ] add cache + defined loaders / results storage
 - [ ] add config
 - [x] prom metrics
 - [ ] add tests?

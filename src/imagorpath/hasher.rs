@@ -104,27 +104,24 @@ pub fn size_suffix_result_storage_hasher(p: &params::Params) -> String {
     format!("{}{}", image, hash_with_size)
 }
 
-#[tracing::instrument(
-    name = "Verify password hash",
-    skip(expected_password_hash, password_candidate)
-)]
+#[tracing::instrument(name = "Verify path hash", skip(expected_path_hash, path_candidate))]
 pub fn verify_hash(
-    expected_password_hash: SecretString,
-    password_candidate: SecretString,
+    expected_path_hash: SecretString,
+    path_candidate: SecretString,
 ) -> Result<(), AuthError> {
-    let expected_password_hash = PasswordHash::new(expected_password_hash.expose_secret())
+    let expected_path_hash = PasswordHash::new(expected_path_hash.expose_secret())
         .context("Failed to parse hash in PHC string format.")?;
 
     Argon2::default()
         .verify_password(
-            password_candidate.expose_secret().as_bytes(),
-            &expected_password_hash,
+            path_candidate.expose_secret().as_bytes(),
+            &expected_path_hash,
         )
-        .context("Invalid password.")
+        .context("Invalid hash")
         .map_err(AuthError::InvalidCredentials)
 }
 
-#[tracing::instrument(name = "Compute password hash", skip(path))]
+#[tracing::instrument(name = "Compute path hash", skip(path))]
 pub fn compute_hash(path: String) -> Result<SecretString> {
     let salt = SaltString::generate(&mut rand::thread_rng());
     let hash_password = Argon2::new(
