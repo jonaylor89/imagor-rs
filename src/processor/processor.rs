@@ -107,11 +107,10 @@ impl ImageProcessor for Processor {
 
         let img = self.apply_filters(img, params, &processing_params)?;
 
-        // if p.Meta {
+        // if p.meta {
         //     // metadata without export
         //     return imagor.NewBlobFromJsonMarshal(metadata(img, format, stripExif)), nil
         // }
-        // format = supportedSaveFormat(format) // convert to supported export format
 
         let inferred_format: Option<ImageType> =
             infer::get(&blob.data).map(|t| match t.mime_type() {
