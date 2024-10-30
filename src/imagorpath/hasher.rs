@@ -139,11 +139,64 @@ pub fn compute_hash(path: String) -> Result<SecretString> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use color_eyre::Result;
+
     use crate::imagorpath::{
         filter::{Filter, ImageType},
         params::Params,
         parse::parse_path,
     };
+
+    #[test]
+    fn test_compute_and_verify_hash() -> Result<()> {
+        let test_path = "my/test/path".to_string();
+        let hash = compute_hash(test_path.clone())?;
+
+        // Verify the computed hash
+        verify_hash(hash, SecretString::from(test_path))?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_verify_hash_with_invalid_input() {
+        let test_path = "my/test/path".to_string();
+        let hash = compute_hash(test_path).unwrap();
+
+        // Try to verify with wrong path
+        let result = verify_hash(hash, SecretString::from("wrong/path".to_string()));
+        assert!(result.is_err());
+
+        if let Err(e) = result {
+            assert!(matches!(e, AuthError::InvalidCredentials(_)));
+        }
+    }
+
+    #[test]
+    fn test_verify_hash_with_invalid_hash_format() {
+        let result = verify_hash(
+            SecretString::from("not-a-valid-hash-format".to_string()),
+            SecretString::from("some/path".to_string()),
+        );
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_hash_consistency() -> Result<()> {
+        let test_path = "consistent/test/path".to_string();
+
+        // Compute multiple hashes for same input
+        let hash1 = compute_hash(test_path.clone())?;
+        let hash2 = compute_hash(test_path.clone())?;
+
+        // Verify both hashes work with the original path
+        verify_hash(hash1, SecretString::from(test_path.clone()))?;
+        verify_hash(hash2, SecretString::from(test_path))?;
+
+        Ok(())
+    }
 
     #[test]
     fn test_digest_result_storage_hasher() {

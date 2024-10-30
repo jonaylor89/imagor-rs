@@ -11,7 +11,7 @@ imagor but in rust (mostly for self-learning purposes)
 - [x] storage backend / load images
 - [x] process images (with vips)
 - [x] serve processed images
-- [ ] enforce auth on main route
+- [x] enforce auth on main route
 - [ ] add cache + defined loaders / results storage
 - [ ] add config
 - [x] prom metrics

@@ -188,7 +188,7 @@ async fn handler(
         })
 }
 
-#[tracing::instrument(skip(state))]
+#[tracing::instrument]
 async fn params(params: Params) -> Result<Json<Params>, (StatusCode, String)> {
     info!("params: {:?}", params);
 
