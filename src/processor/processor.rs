@@ -19,7 +19,7 @@ use libvips::{
     },
     VipsImage,
 };
-use tracing::{debug, error, info};
+use tracing::{debug, error};
 
 pub trait ImageProcessor: Send + Sync {
     fn startup(&self) -> Result<()>;

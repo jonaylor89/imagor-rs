@@ -1,10 +1,13 @@
+use crate::cache::redis::RedisCache;
 use crate::imagorpath::hasher::verify_hash;
 use crate::imagorpath::{normalize::SafeCharsType, params::Params};
 use crate::metrics::{setup_metrics_recorder, track_metrics};
+use crate::middleware::cache_middleware;
 use crate::processor::processor::{Processor, ProcessorOptions};
 use crate::state::AppStateDyn;
-use crate::storage::file::FileStorage;
-use crate::storage::storage::Blob;
+use crate::storage::s3::S3Storage;
+use crate::storage::storage::{Blob, ImageStorage};
+use aws_sdk_s3::Client;
 use axum::body::Body;
 use axum::extract::{MatchedPath, Request, State};
 use axum::http::{header, Response, StatusCode};
@@ -18,6 +21,7 @@ use libvips::VipsApp;
 use reqwest;
 use std::future::ready;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 use tracing::{info, info_span};
@@ -60,19 +64,47 @@ impl Application {
 async fn run(listener: TcpListener) -> Result<Serve<Router, Router>> {
     let recorder_handle = setup_metrics_recorder();
 
-    let storage = FileStorage::new(
+    let storage = S3Storage::new_with_minio(
         "base_dir".into(),
         "images_dir".into(),
         SafeCharsType::Default,
-    );
+        "imagor-rs".into(),
+        "http://minio:9000".into(),
+        "minioadmin".into(),
+        "minioadmin".into(),
+    )
+    .await?;
+
+    // Wait for MinIO to be ready
+    wait_for_minio(&storage.client, 5, Duration::from_secs(2)).await?;
+
+    // Ensure bucket exists
+    storage.ensure_bucket_exists().await?;
+
+    // Now try to upload the test image
+    if let Ok(test_image) = std::fs::read("samples/test2.png") {
+        let blob = Blob {
+            content_type: "image/png".into(),
+            data: test_image,
+        };
+
+        storage.put("test2.png", blob).await.inspect_err(|e| {
+            tracing::error!("Failed to put test2.png: {:?}", e);
+        })?;
+    } else {
+        tracing::warn!("Test image not found at samples/test2.png");
+    }
+
     let processor = Processor::new(ProcessorOptions {
         disable_blur: false,
         disabled_filters: vec![],
         concurrency: None,
     });
+    let cache = RedisCache::new("redis://redis:6379")?;
     let state = AppStateDyn {
         storage: Arc::new(storage.clone()),
         processor: Arc::new(processor),
+        cache: Arc::new(cache.clone()),
     };
 
     let app = Router::new()
@@ -99,6 +131,10 @@ async fn run(listener: TcpListener) -> Result<Serve<Router, Router>> {
             }),
         )
         .route_layer(middleware::from_fn(track_metrics))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            cache_middleware,
+        ))
         .with_state(state);
 
     tracing::debug!("listening on {}", listener.local_addr().unwrap());
@@ -123,7 +159,7 @@ async fn handler(
         })?;
     }
 
-    // TODO: check cache for image and serve if found
+    // TODO: check result bucket for image and serve if found
 
     // if image is not in cache, fetch image
     let img = params.image.as_ref().ok_or((
@@ -175,7 +211,7 @@ async fn handler(
         )
     })?;
 
-    // TODO: save image to cache
+    // TODO: save image to result bucket
 
     Response::builder()
         .header(header::CONTENT_TYPE, blob.content_type)
@@ -204,4 +240,30 @@ async fn root() -> &'static str {
 async fn health_check() -> &'static str {
     tracing::info!("Health check called");
     "OK"
+}
+
+async fn wait_for_minio(client: &Client, max_retries: u32, delay: Duration) -> Result<()> {
+    for i in 0..max_retries {
+        match client.list_buckets().send().await {
+            Ok(_) => {
+                info!("Successfully connected to MinIO");
+                return Ok(());
+            }
+            Err(e) => {
+                if i == max_retries - 1 {
+                    return Err(e.into());
+                }
+                info!(
+                    "Waiting for MinIO to be ready... (attempt {}/{})",
+                    i + 1,
+                    max_retries
+                );
+                tokio::time::sleep(delay).await;
+            }
+        }
+    }
+    Err(color_eyre::eyre::eyre!(
+        "Failed to connect to MinIO after {} retries",
+        max_retries
+    ))
 }

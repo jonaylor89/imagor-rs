@@ -1,5 +1,7 @@
+pub mod cache;
 pub mod imagorpath;
 pub mod metrics;
+pub mod middleware;
 pub mod processor;
 pub mod startup;
 pub mod state;
