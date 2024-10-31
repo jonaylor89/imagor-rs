@@ -82,18 +82,18 @@ async fn run(listener: TcpListener) -> Result<Serve<Router, Router>> {
     storage.ensure_bucket_exists().await?;
 
     // Now try to upload the test image
-    if let Ok(test_image) = std::fs::read("samples/test2.png") {
-        let blob = Blob {
-            content_type: "image/png".into(),
-            data: test_image,
-        };
+    // if let Ok(test_image) = std::fs::read("samples/test2.png") {
+    //     let blob = Blob {
+    //         content_type: "image/png".into(),
+    //         data: test_image,
+    //     };
 
-        storage.put("test2.png", blob).await.inspect_err(|e| {
-            tracing::error!("Failed to put test2.png: {:?}", e);
-        })?;
-    } else {
-        tracing::warn!("Test image not found at samples/test2.png");
-    }
+    //     storage.put("test2.png", blob).await.inspect_err(|e| {
+    //         tracing::error!("Failed to put test2.png: {:?}", e);
+    //     })?;
+    // } else {
+    //     tracing::warn!("Test image not found at samples/test2.png");
+    // }
 
     let processor = Processor::new(ProcessorOptions {
         disable_blur: false,
