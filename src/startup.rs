@@ -6,7 +6,7 @@ use crate::middleware::cache_middleware;
 use crate::processor::processor::{Processor, ProcessorOptions};
 use crate::state::AppStateDyn;
 use crate::storage::s3::S3Storage;
-use crate::storage::storage::{Blob, ImageStorage};
+use crate::storage::storage::Blob;
 use aws_sdk_s3::Client;
 use axum::body::Body;
 use axum::extract::{MatchedPath, Request, State};
@@ -74,9 +74,6 @@ async fn run(listener: TcpListener) -> Result<Serve<Router, Router>> {
         "minioadmin".into(),
     )
     .await?;
-
-    // Wait for MinIO to be ready
-    wait_for_minio(&storage.client, 5, Duration::from_secs(2)).await?;
 
     // Ensure bucket exists
     storage.ensure_bucket_exists().await?;
@@ -240,30 +237,4 @@ async fn root() -> &'static str {
 async fn health_check() -> &'static str {
     tracing::info!("Health check called");
     "OK"
-}
-
-async fn wait_for_minio(client: &Client, max_retries: u32, delay: Duration) -> Result<()> {
-    for i in 0..max_retries {
-        match client.list_buckets().send().await {
-            Ok(_) => {
-                info!("Successfully connected to MinIO");
-                return Ok(());
-            }
-            Err(e) => {
-                if i == max_retries - 1 {
-                    return Err(e.into());
-                }
-                info!(
-                    "Waiting for MinIO to be ready... (attempt {}/{})",
-                    i + 1,
-                    max_retries
-                );
-                tokio::time::sleep(delay).await;
-            }
-        }
-    }
-    Err(color_eyre::eyre::eyre!(
-        "Failed to connect to MinIO after {} retries",
-        max_retries
-    ))
 }

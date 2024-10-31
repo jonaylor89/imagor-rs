@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::imagorpath::normalize::{normalize, SafeCharsType};
 use crate::storage::storage::{Blob, ImageStorage};
 use aws_sdk_s3::config::{Credentials, Region};
@@ -5,6 +7,7 @@ use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::{Client, Config};
 use axum::async_trait;
 use color_eyre::Result;
+use tracing::info;
 
 #[derive(Clone)]
 pub struct S3Storage {
@@ -111,6 +114,9 @@ impl S3Storage {
 
         let client = Client::from_conf(config);
 
+        // Wait for MinIO to be ready
+        wait_for_minio(&client, 5, Duration::from_secs(2)).await?;
+
         Ok(S3Storage {
             base_dir,
             path_prefix,
@@ -144,4 +150,30 @@ impl S3Storage {
         let safe_key = normalize(key, &self.safe_chars);
         format!("{}/{}", self.path_prefix, safe_key)
     }
+}
+
+async fn wait_for_minio(client: &Client, max_retries: u32, delay: Duration) -> Result<()> {
+    for i in 0..max_retries {
+        match client.list_buckets().send().await {
+            Ok(_) => {
+                info!("Successfully connected to MinIO");
+                return Ok(());
+            }
+            Err(e) => {
+                if i == max_retries - 1 {
+                    return Err(e.into());
+                }
+                info!(
+                    "Waiting for MinIO to be ready... (attempt {}/{})",
+                    i + 1,
+                    max_retries
+                );
+                tokio::time::sleep(delay).await;
+            }
+        }
+    }
+    Err(color_eyre::eyre::eyre!(
+        "Failed to connect to MinIO after {} retries",
+        max_retries
+    ))
 }
