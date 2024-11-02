@@ -41,10 +41,10 @@ impl ImageStorage for GCloudStorage {
     }
 
     #[tracing::instrument(skip(self, blob))]
-    async fn put(&self, key: &str, blob: Blob) -> Result<()> {
+    async fn put(&self, key: &str, blob: &Blob) -> Result<()> {
         let full_path = self.get_full_path(key);
         let upload_type = UploadType::Simple(Media::new(full_path));
-        let blob_data = blob.data;
+        let blob_data = blob.data.clone();
         self.client
             .upload_object(
                 &UploadObjectRequest {

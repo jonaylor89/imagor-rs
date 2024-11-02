@@ -39,14 +39,14 @@ impl ImageStorage for S3Storage {
     }
 
     #[tracing::instrument(skip(self, blob))]
-    async fn put(&self, key: &str, blob: Blob) -> Result<()> {
+    async fn put(&self, key: &str, blob: &Blob) -> Result<()> {
         let full_path = self.get_full_path(key);
 
         self.client
             .put_object()
             .bucket(&self.bucket)
             .key(full_path)
-            .body(ByteStream::from(blob.data))
+            .body(ByteStream::from(blob.data.clone()))
             .send()
             .await?;
 

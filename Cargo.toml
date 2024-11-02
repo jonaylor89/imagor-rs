@@ -30,7 +30,7 @@ rand = "0.8.5"
 thiserror = "1.0.64"
 google-cloud-storage = "0.22.1"
 infer = "0.16.0"
-tower-http = { version = "0.6.1", features = ["trace"] }
+tower-http = { version = "0.6.1", features = ["trace", "limit"] }
 dotenvy = "0.15.7"
 metrics-exporter-prometheus = { version = "0.15.3", default-features = false }
 metrics = { version = "0.23.0", default-features = false }
@@ -38,5 +38,5 @@ tokio-util = "0.7.12"
 reqwest = "0.12.8"
 image = "0.25.4"
 aws-sdk-s3 = "1.58.0"
-tower = "0.5.1"
+tower = { version = "0.5.1", features = ["limit", "buffer"] }
 redis = { version = "0.27.5", features = ["tokio-comp", "tokio-rustls-comp"] }

@@ -1,5 +1,5 @@
 use crate::cache::redis::RedisCache;
-use crate::imagorpath::hasher::verify_hash;
+use crate::imagorpath::hasher::{suffix_result_storage_hasher, verify_hash};
 use crate::imagorpath::{normalize::SafeCharsType, params::Params};
 use crate::metrics::{setup_metrics_recorder, track_metrics};
 use crate::middleware::cache_middleware;
@@ -7,8 +7,8 @@ use crate::processor::processor::{Processor, ProcessorOptions};
 use crate::state::AppStateDyn;
 use crate::storage::s3::S3Storage;
 use crate::storage::storage::Blob;
-use aws_sdk_s3::Client;
 use axum::body::Body;
+use axum::error_handling::HandleErrorLayer;
 use axum::extract::{MatchedPath, Request, State};
 use axum::http::{header, Response, StatusCode};
 use axum::response::IntoResponse;
@@ -23,8 +23,12 @@ use std::future::ready;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpListener;
+use tokio::task;
+use tower::buffer::BufferLayer;
+use tower::limit::RateLimitLayer;
+use tower::{BoxError, ServiceBuilder};
 use tower_http::trace::TraceLayer;
-use tracing::{info, info_span};
+use tracing::{info, info_span, warn};
 
 pub struct Application {
     port: u16,
@@ -127,6 +131,17 @@ async fn run(listener: TcpListener) -> Result<Serve<Router, Router>> {
                 )
             }),
         )
+        // .layer(
+        //     ServiceBuilder::new()
+        //         .layer(HandleErrorLayer::new(|err: BoxError| async move {
+        //             (
+        //                 StatusCode::INTERNAL_SERVER_ERROR,
+        //                 format!("Unhandled error: {}", err),
+        //             )
+        //         }))
+        //         .layer(BufferLayer::new(1024))
+        //         .layer(RateLimitLayer::new(50, Duration::from_secs(1))),
+        // )
         .route_layer(middleware::from_fn(track_metrics))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
@@ -157,6 +172,21 @@ async fn handler(
     }
 
     // TODO: check result bucket for image and serve if found
+    let params_hash = suffix_result_storage_hasher(&params);
+    let result = state.storage.get(&params_hash).await.inspect_err(|_| {
+        tracing::info!("no image in results storage: {}", &params);
+    });
+    if let Ok(blob) = result {
+        return Response::builder()
+            .header(header::CONTENT_TYPE, blob.content_type)
+            .body(Body::from(blob.data))
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to build response: {}", e),
+                )
+            });
+    }
 
     // if image is not in cache, fetch image
     let img = params.image.as_ref().ok_or((
@@ -201,7 +231,18 @@ async fn handler(
         })?
     };
 
-    let blob = state.processor.process(&blob, &params).map_err(|e| {
+    let blob = task::spawn_blocking(move || {
+        // Perform CPU-intensive operation
+        state.processor.process(&blob, &params)
+    })
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("joining spawned task failed: {}", e),
+        )
+    })?
+    .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to process image: {}", e),
@@ -209,6 +250,13 @@ async fn handler(
     })?;
 
     // TODO: save image to result bucket
+    state.storage.put(&params_hash, &blob).await.map_err(|e| {
+        warn!("Failed to save result image [{}]: {}", &params_hash, e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to save result image: {}", e),
+        )
+    })?;
 
     Response::builder()
         .header(header::CONTENT_TYPE, blob.content_type)

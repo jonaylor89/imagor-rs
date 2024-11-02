@@ -14,7 +14,7 @@ pub async fn cache_middleware(
     req: Request,
     next: Next,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    let cache_key = generate_cache_key(&req);
+    let cache_key = format!("{}:{}", req.method(), req.uri().path());
 
     let cache_response = state.cache.get(&cache_key).await.map_err(|e| {
         (
@@ -54,14 +54,12 @@ pub async fn cache_middleware(
             format!("Failed to read response body: {}", e),
         )
     })?;
+
+    // TODO: use hash key for this
     let _ = state
         .cache
         .set(&cache_key, bytes.as_ref(), Some(Duration::from_secs(3_600))) // 1 hour
         .await;
 
     Ok(Response::from_parts(parts, Body::from(bytes)))
-}
-
-fn generate_cache_key(req: &Request) -> String {
-    format!("{}:{}", req.method(), req.uri().path())
 }

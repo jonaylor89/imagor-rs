@@ -43,6 +43,14 @@ pub fn suffix_result_storage_hasher(p: &params::Params) -> String {
     let hash = format!(".{}", hex::encode(&digest[..10]));
 
     let image = p.image.as_ref().unwrap();
+    let image = if image.starts_with("https://") {
+        &image[8..].to_string()
+    } else if image.starts_with("http://") {
+        &image[7..].to_string()
+    } else {
+        image
+    };
+
     let dot_idx = image.rfind('.');
     let slash_idx = image.rfind('/');
 
@@ -296,7 +304,6 @@ mod tests {
         let p_without_path = Params { path: None, ..p };
         assert_eq!(
             suffix_result_storage_hasher(&p_without_path),
-            // "foobar.45d8ebb31bd4ed80c26e.jpg"
             "foobar.b9bb1f64c760cf298fb6.jpg",
         );
     }

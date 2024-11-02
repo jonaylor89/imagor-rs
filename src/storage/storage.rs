@@ -5,7 +5,7 @@ use infer;
 #[async_trait]
 pub trait ImageStorage: Send + Sync {
     async fn get(&self, key: &str) -> Result<Blob>;
-    async fn put(&self, key: &str, blob: Blob) -> Result<()>;
+    async fn put(&self, key: &str, blob: &Blob) -> Result<()>;
     async fn delete(&self, key: &str) -> Result<()>;
 }
 

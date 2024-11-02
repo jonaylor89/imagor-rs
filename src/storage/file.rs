@@ -26,7 +26,7 @@ impl ImageStorage for FileStorage {
     }
 
     #[tracing::instrument(skip(self, blob))]
-    async fn put(&self, key: &str, blob: Blob) -> Result<()> {
+    async fn put(&self, key: &str, blob: &Blob) -> Result<()> {
         let full_path = self.get_full_path(key);
         if let Some(parent) = full_path.parent() {
             fs::create_dir_all(parent)?;
@@ -37,7 +37,7 @@ impl ImageStorage for FileStorage {
             .truncate(true)
             .open(full_path)
             .await?;
-        file.write_all(&blob.data).await?;
+        file.write_all(blob.as_ref()).await?;
         Ok(())
     }
 
