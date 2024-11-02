@@ -21,7 +21,7 @@ imagor but in rust (mostly for self-learning purposes)
 
 # imagor
 
-imagor is a fast, secure image processing server and Go library.
+imagor is a fast, secure image processing server and rust library.
 
 imagor uses one of the most efficient image processing library
 [libvips](https://www.libvips.org/). It is typically 4-8x [faster](https://github.com/libvips/libvips/wiki/Speed-and-memory-use) than using the quickest ImageMagick and GraphicsMagick settings.
