@@ -40,3 +40,5 @@ image = "0.25.4"
 aws-sdk-s3 = "1.58.0"
 tower = { version = "0.5.1", features = ["limit", "buffer"] }
 redis = { version = "0.27.5", features = ["tokio-comp", "tokio-rustls-comp"] }
+tower_governor = { version = "0.4.3", features = ["tracing"] }
+serde-aux = "4.5.0"

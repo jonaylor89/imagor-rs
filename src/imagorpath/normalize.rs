@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 use std::path::Path;
 
+use serde::{Deserialize, Deserializer};
+
 const UPPER_HEX: &str = "0123456789ABCDEF";
 
 trait SafeChars {
@@ -39,13 +41,31 @@ impl SafeChars for SafeCharsType {
     }
 }
 
-pub fn new_safe_chars(safechars: &str) -> SafeCharsType {
-    if safechars == "--" {
-        SafeCharsType::Noop
-    } else if safechars.is_empty() {
-        SafeCharsType::Default
-    } else {
-        SafeCharsType::Custom(safechars.bytes().collect())
+impl<'de> Deserialize<'de> for SafeCharsType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(s.into())
+    }
+}
+
+impl From<&str> for SafeCharsType {
+    fn from(s: &str) -> Self {
+        if s == "--" {
+            SafeCharsType::Noop
+        } else if s.is_empty() {
+            SafeCharsType::Default
+        } else {
+            SafeCharsType::Custom(s.bytes().collect())
+        }
+    }
+}
+
+impl From<String> for SafeCharsType {
+    fn from(s: String) -> Self {
+        s.as_str().into()
     }
 }
 
@@ -71,9 +91,12 @@ where
 }
 
 pub fn normalize(key: &str, safe_chars: &SafeCharsType) -> String {
-    let cleaned = key
-        .replace("\r\n", "")
-        .replace(['\r', '\n', '\u{000B}', '\u{000C}', '\u{0085}', '\u{2028}', '\u{2029}'], "");
+    let cleaned = key.replace("\r\n", "").replace(
+        [
+            '\r', '\n', '\u{000B}', '\u{000C}', '\u{0085}', '\u{2028}', '\u{2029}',
+        ],
+        "",
+    );
 
     let cleaned = cleaned.trim_matches('/');
     let path = Path::new(&cleaned).to_str().unwrap_or(cleaned);

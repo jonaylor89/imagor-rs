@@ -1,4 +1,5 @@
 pub mod cache;
+pub mod config;
 pub mod imagorpath;
 pub mod metrics;
 pub mod middleware;

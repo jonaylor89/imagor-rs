@@ -69,13 +69,6 @@ pub struct FocalPoint {
 }
 
 #[derive(Debug)]
-pub struct ProcessorOptions {
-    pub disable_blur: bool,
-    pub disabled_filters: Vec<Filter>,
-    pub concurrency: Option<i32>,
-}
-
-#[derive(Debug)]
 struct ExportOptions {
     quality: Option<i32>,
     compression: Option<i32>,

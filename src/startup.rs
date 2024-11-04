@@ -1,14 +1,15 @@
+use crate::cache::cache::ImageCache;
 use crate::cache::redis::RedisCache;
+use crate::config::Settings;
 use crate::imagorpath::hasher::{suffix_result_storage_hasher, verify_hash};
 use crate::imagorpath::{normalize::SafeCharsType, params::Params};
 use crate::metrics::{setup_metrics_recorder, track_metrics};
 use crate::middleware::cache_middleware;
-use crate::processor::processor::{Processor, ProcessorOptions};
+use crate::processor::processor::{ImageProcessor, Processor, ProcessorOptions};
 use crate::state::AppStateDyn;
 use crate::storage::s3::S3Storage;
-use crate::storage::storage::Blob;
+use crate::storage::storage::{Blob, ImageStorage};
 use axum::body::Body;
-use axum::error_handling::HandleErrorLayer;
 use axum::extract::{MatchedPath, Request, State};
 use axum::http::{header, Response, StatusCode};
 use axum::response::IntoResponse;
@@ -21,17 +22,13 @@ use libvips::VipsApp;
 use reqwest;
 use std::future::ready;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::task;
-use tower::buffer::BufferLayer;
-use tower::limit::RateLimitLayer;
-use tower::{BoxError, ServiceBuilder};
 use tower_http::trace::TraceLayer;
 use tracing::{info, info_span, warn};
 
 pub struct Application {
-    port: u16,
+    pub port: u16,
     server: Serve<Router, Router>,
 
     // This is a hack to keep the VipsApp alive for the lifetime of the application
@@ -39,15 +36,34 @@ pub struct Application {
 }
 
 impl Application {
-    pub async fn build(port: u16) -> Result<Self> {
+    pub async fn build(config: Settings) -> Result<Self> {
         let _vips_app = VipsApp::new("imagor_rs", true).wrap_err("Failed to initialize VipsApp")?;
-        _vips_app.concurrency_set(4);
+        _vips_app.concurrency_set(config.processor.concurrency);
 
-        let listener = TcpListener::bind(format!("0.0.0.0:{}", port)).await.wrap_err(
+        let address = format!("{}:{}", config.application.host, config.application.port);
+        let listener = TcpListener::bind(address).await.wrap_err(
             "Failed to bind to the port. Make sure you have the correct permissions to bind to the port",
         )?;
+        let port = listener.local_addr()?.port();
 
-        let server = run(listener).await?;
+        let storage = S3Storage::new_with_minio(
+            "base_dir".into(),
+            "images_dir".into(),
+            SafeCharsType::Default,
+            "imagor-rs".into(),
+            "http://minio:9000".into(),
+            "minioadmin".into(),
+            "minioadmin".into(),
+        )
+        .await?;
+
+        // Ensure bucket exists
+        storage.ensure_bucket_exists().await?;
+
+        let processor = Processor::default();
+        let cache = RedisCache::new("redis://redis:6379")?;
+
+        let server = run(listener, storage, processor, cache).await?;
 
         Ok(Self {
             port,
@@ -56,52 +72,24 @@ impl Application {
         })
     }
 
-    pub fn port(&self) -> u16 {
-        self.port
-    }
-
     pub async fn run_until_stopped(self) -> Result<(), std::io::Error> {
         self.server.await
     }
 }
 
-async fn run(listener: TcpListener) -> Result<Serve<Router, Router>> {
+async fn run<S, P, C>(
+    listener: TcpListener,
+    storage: S,
+    processor: P,
+    cache: C,
+) -> Result<Serve<Router, Router>>
+where
+    S: ImageStorage + Clone + Send + Sync + 'static,
+    P: ImageProcessor + Send + Sync + 'static,
+    C: ImageCache + Clone + Send + Sync + 'static,
+{
     let recorder_handle = setup_metrics_recorder();
 
-    let storage = S3Storage::new_with_minio(
-        "base_dir".into(),
-        "images_dir".into(),
-        SafeCharsType::Default,
-        "imagor-rs".into(),
-        "http://minio:9000".into(),
-        "minioadmin".into(),
-        "minioadmin".into(),
-    )
-    .await?;
-
-    // Ensure bucket exists
-    storage.ensure_bucket_exists().await?;
-
-    // Now try to upload the test image
-    // if let Ok(test_image) = std::fs::read("samples/test2.png") {
-    //     let blob = Blob {
-    //         content_type: "image/png".into(),
-    //         data: test_image,
-    //     };
-
-    //     storage.put("test2.png", blob).await.inspect_err(|e| {
-    //         tracing::error!("Failed to put test2.png: {:?}", e);
-    //     })?;
-    // } else {
-    //     tracing::warn!("Test image not found at samples/test2.png");
-    // }
-
-    let processor = Processor::new(ProcessorOptions {
-        disable_blur: false,
-        disabled_filters: vec![],
-        concurrency: None,
-    });
-    let cache = RedisCache::new("redis://redis:6379")?;
     let state = AppStateDyn {
         storage: Arc::new(storage.clone()),
         processor: Arc::new(processor),
@@ -113,7 +101,16 @@ async fn run(listener: TcpListener) -> Result<Serve<Router, Router>> {
         .route("/metrics", get(move || ready(recorder_handle.render())))
         .route("/", get(root))
         .route("/params/*imagorpath", get(params))
-        .route("/*imagorpath", get(handler))
+        .route_layer(middleware::from_fn(track_metrics))
+        .nest(
+            "/",
+            Router::new()
+                .route("/*imagorpath", get(handler))
+                .route_layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    cache_middleware,
+                )),
+        )
         .layer(
             TraceLayer::new_for_http().make_span_with(|request: &Request<_>| {
                 // Log the matched route's path (with placeholders not filled in).
@@ -142,11 +139,6 @@ async fn run(listener: TcpListener) -> Result<Serve<Router, Router>> {
         //         .layer(BufferLayer::new(1024))
         //         .layer(RateLimitLayer::new(50, Duration::from_secs(1))),
         // )
-        .route_layer(middleware::from_fn(track_metrics))
-        .route_layer(middleware::from_fn_with_state(
-            state.clone(),
-            cache_middleware,
-        ))
         .with_state(state);
 
     tracing::debug!("listening on {}", listener.local_addr().unwrap());

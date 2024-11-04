@@ -1,0 +1,17 @@
+application:
+  address: 127.0.0.1
+  port: 8080
+  hmac_secret: "super-long-and-secret-random-key-needed-to-verify-message-integrity"
+processor:
+  max_filter_ops: 10
+  max_width: 16000
+  max_height: 16000
+storage:
+  base_dir: "base_dir"
+  images_dir: images_dir
+  bucket: "imagor-rs"
+  endpoint: "http://minio:9000"
+  access_key: "minioadmin"
+  secret_key: "minioadmin"
+cache:
+  uri: "redis://localhost:6379"
