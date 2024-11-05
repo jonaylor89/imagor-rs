@@ -2,6 +2,7 @@ use std::{thread::available_parallelism, time::Instant};
 
 use super::image::{Image, ProcessError};
 use crate::{
+    config::ProcessorSettings,
     imagorpath::{
         color::Color,
         filter::{Filter, ImageType},
@@ -30,7 +31,7 @@ pub trait ImageProcessor: Send + Sync {
 #[derive(Debug, Default)]
 pub struct Processor {
     disable_blur: bool,
-    disable_filters: Vec<Filter>,
+    disable_filters: Vec<String>,
     max_filter_ops: usize,
     concurrency: i32,
     max_cache_files: i32,
@@ -129,10 +130,10 @@ impl ImageProcessor for Processor {
 }
 
 impl Processor {
-    pub fn new(p_options: ProcessorOptions) -> Self {
+    pub fn new(p_options: ProcessorSettings) -> Self {
         let mut disabled_filters = p_options.disabled_filters;
         if p_options.disable_blur {
-            disabled_filters.push(Filter::Blur(F32(0.0)));
+            disabled_filters.push("blur".into());
         }
 
         let concurrency = p_options.concurrency.unwrap_or_else(|| {
@@ -184,7 +185,7 @@ impl Processor {
             .filters
             .iter()
             .fold(params_after_blob, |acc, filter| {
-                if self.disable_filters.contains(filter) {
+                if self.disable_filters.contains(&filter.name()) {
                     return acc;
                 }
 
@@ -457,7 +458,7 @@ impl Processor {
         let filters_slice: &[Filter] = &params.filters[..truncate_length];
 
         let filtered = filters_slice.iter().fold(img, |img, filter| {
-            if self.disable_filters.contains(filter) {
+            if self.disable_filters.contains(&filter.name()) {
                 return img;
             }
 
@@ -654,11 +655,7 @@ mod tests {
             content_type: "image/jpeg".to_string(),
         };
 
-        let processor = Processor::new(ProcessorOptions {
-            disable_blur: false,
-            disabled_filters: vec![],
-            concurrency: Some(1),
-        });
+        let processor = Processor::default();
 
         let params = Params::default();
         let result = processor.process(&blob, &params);

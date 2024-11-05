@@ -24,9 +24,11 @@ pub struct ApplicationSettings {
 #[derive(serde::Deserialize, Clone)]
 pub struct ProcessorSettings {
     pub disable_blur: bool,
-    pub disable_filters: Vec<String>,
+    pub disabled_filters: Vec<String>,
     pub max_filter_ops: usize,
-    pub concurrency: i32,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub concurrency: Option<i32>,
     pub max_cache_files: i32,
     pub max_cache_mem: i32,
     pub max_cache_size: i32,

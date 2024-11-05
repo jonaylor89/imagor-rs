@@ -71,6 +71,44 @@ impl std::fmt::Display for Filter {
     }
 }
 
+impl Filter {
+    pub fn name(&self) -> String {
+        let name = match self {
+            Filter::BackgroundColor(_) => "background_color",
+            Filter::Blur(_) => "blur",
+            Filter::Brightness(_) => "brightness",
+            Filter::Contrast(_) => "contrast",
+            Filter::Fill(_) => "fill",
+            Filter::Focal(_) => "focal",
+            Filter::Format(_) => "format",
+            Filter::Grayscale => "grayscale",
+            Filter::Hue(_) => "hue",
+            Filter::Label(_) => "label",
+            Filter::MaxBytes(_) => "max_bytes",
+            Filter::MaxFrames(_) => "max_frames",
+            Filter::Modulate(_, _, _) => "modulate",
+            Filter::Orient(_) => "orient",
+            Filter::Padding(_, _) => "padding",
+            Filter::Page(_) => "page",
+            Filter::Dpi(_) => "dpi",
+            Filter::Proportion(_) => "proportion",
+            Filter::Quality(_) => "quality",
+            Filter::Rgb(_, _, _) => "rgb",
+            Filter::Rotate(_) => "rotate",
+            Filter::RoundCorner(_) => "round_corner",
+            Filter::Saturation(_) => "saturation",
+            Filter::Sharpen(_) => "sharpen",
+            Filter::StripExif => "strip_exif",
+            Filter::StripIcc => "strip_icc",
+            Filter::StripMetadata => "strip_metadata",
+            Filter::Upscale => "upscale",
+            Filter::Watermark(_) => "watermark",
+        };
+
+        return name.to_string();
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ImageType {

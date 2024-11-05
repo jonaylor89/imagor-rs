@@ -13,11 +13,11 @@ use std::time;
 pub struct GCloudStorage {
     pub base_dir: String,
     pub path_prefix: String,
-    // pub acl: String,
     pub safe_chars: SafeCharsType,
-    pub expiration: time::Duration,
     pub client: Client,
     pub bucket: String,
+    // pub expiration: time::Duration,
+    // pub acl: String,
 }
 
 #[async_trait]
@@ -87,11 +87,11 @@ impl GCloudStorage {
         GCloudStorage {
             base_dir,
             path_prefix,
-            // acl,
             safe_chars,
-            expiration,
             client,
             bucket,
+            // acl,
+            // expiration,
         }
     }
 
