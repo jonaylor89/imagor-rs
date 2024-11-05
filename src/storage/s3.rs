@@ -4,7 +4,7 @@ use crate::imagorpath::normalize::{normalize, SafeCharsType};
 use crate::storage::storage::{Blob, ImageStorage};
 use aws_sdk_s3::config::{Credentials, Region};
 use aws_sdk_s3::primitives::ByteStream;
-use aws_sdk_s3::{Client, Config};
+use aws_sdk_s3::Client;
 use axum::async_trait;
 use color_eyre::Result;
 use tracing::info;
@@ -74,9 +74,27 @@ impl S3Storage {
         path_prefix: String,
         safe_chars: SafeCharsType,
         bucket: String,
-        config: Config,
+        region: String,
+        access_key: &str,
+        secret_key: &str,
     ) -> Self {
+        // Create custom credentials
+        let credentials = Credentials::new(
+            access_key, secret_key, None, // session token
+            None, // expiry
+            "minio",
+        );
+
+        // Create the config
+        let config = aws_sdk_s3::Config::builder()
+            .behavior_version_latest()
+            .region(Region::new(region))
+            .credentials_provider(credentials)
+            .force_path_style(true) // This is important for MinIO
+            .build();
+
         let client = Client::from_conf(config);
+
         S3Storage {
             base_dir,
             path_prefix,

@@ -1,12 +1,14 @@
 use crate::cache::cache::ImageCache;
 use crate::cache::redis::RedisCache;
-use crate::config::Settings;
+use crate::config::{Settings, StorageClient};
 use crate::imagorpath::hasher::{suffix_result_storage_hasher, verify_hash};
 use crate::imagorpath::{normalize::SafeCharsType, params::Params};
 use crate::metrics::{setup_metrics_recorder, track_metrics};
 use crate::middleware::cache_middleware;
 use crate::processor::processor::{ImageProcessor, Processor, ProcessorOptions};
 use crate::state::AppStateDyn;
+use crate::storage::file::FileStorage;
+use crate::storage::gcs::GCloudStorage;
 use crate::storage::s3::S3Storage;
 use crate::storage::storage::{Blob, ImageStorage};
 use axum::body::Body;
@@ -20,7 +22,9 @@ use color_eyre::eyre::WrapErr;
 use color_eyre::Result;
 use libvips::VipsApp;
 use reqwest;
+use secrecy::ExposeSecret;
 use std::future::ready;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::task;
@@ -46,24 +50,47 @@ impl Application {
         )?;
         let port = listener.local_addr()?.port();
 
-        let storage = S3Storage::new_with_minio(
-            "base_dir".into(),
-            "images_dir".into(),
-            SafeCharsType::Default,
-            "imagor-rs".into(),
-            "http://minio:9000".into(),
-            "minioadmin".into(),
-            "minioadmin".into(),
-        )
-        .await?;
-
-        // Ensure bucket exists
-        storage.ensure_bucket_exists().await?;
-
         let processor = Processor::default();
         let cache = RedisCache::new("redis://redis:6379")?;
+        let server = match config.storage.client {
+            StorageClient::S3(s3_settings) => {
+                let storage = S3Storage::new(
+                    config.storage.base_dir,
+                    config.storage.path_prefix,
+                    config.storage.safe_chars,
+                    s3_settings.region,
+                    s3_settings.bucket,
+                    s3_settings.access_key.expose_secret(),
+                    s3_settings.secret_key.expose_secret(),
+                )
+                .await;
 
-        let server = run(listener, storage, processor, cache).await?;
+                // Ensure bucket exists
+                storage.ensure_bucket_exists().await?;
+
+                run(listener, storage, processor, cache).await?
+            }
+            StorageClient::GCS(gcs_settings) => {
+                let storage = GCloudStorage::new(
+                    config.storage.base_dir,
+                    config.storage.path_prefix,
+                    config.storage.safe_chars,
+                    gcs_settings.bucket,
+                )
+                .await;
+
+                run(listener, storage, processor, cache).await?
+            }
+            StorageClient::Filesystem(filesystem_settings) => {
+                let storage = FileStorage::new(
+                    PathBuf::from(filesystem_settings.base_dir),
+                    config.storage.path_prefix,
+                    config.storage.safe_chars,
+                );
+
+                run(listener, storage, processor, cache).await?
+            }
+        };
 
         Ok(Self {
             port,

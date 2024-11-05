@@ -13,7 +13,7 @@ use std::time;
 pub struct GCloudStorage {
     pub base_dir: String,
     pub path_prefix: String,
-    pub acl: String,
+    // pub acl: String,
     pub safe_chars: SafeCharsType,
     pub expiration: time::Duration,
     pub client: Client,
@@ -74,20 +74,20 @@ impl ImageStorage for GCloudStorage {
 }
 
 impl GCloudStorage {
-    pub fn new(
+    pub async fn new(
         base_dir: String,
         path_prefix: String,
-        acl: String,
         safe_chars: SafeCharsType,
-        expiration: time::Duration,
         bucket: String,
-        config: ClientConfig,
+        // expiration: time::Duration,
+        // acl: String,
     ) -> Self {
+        let config = ClientConfig::default().with_auth().await.unwrap();
         let client = Client::new(config);
         GCloudStorage {
             base_dir,
             path_prefix,
-            acl,
+            // acl,
             safe_chars,
             expiration,
             client,
