@@ -11,7 +11,9 @@ async fn main() -> Result<()> {
         tracing::warn!("failed to parse .env file: {}", e);
     }
 
-    let configuration = get_configuration().expect("Failed to read configuration");
+    let configuration = get_configuration()
+        .inspect_err(|e| tracing::error!("Failed to load configuration: {}", e))
+        .expect("Failed to read configuration");
 
     let subscriber = get_subscriber("imagor_rs".into(), "debug".into(), std::io::stdout);
     init_subscriber(subscriber);

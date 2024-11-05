@@ -26,6 +26,7 @@ use secrecy::ExposeSecret;
 use std::future::ready;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::thread::available_parallelism;
 use tokio::net::TcpListener;
 use tokio::task;
 use tower_http::trace::TraceLayer;
@@ -41,29 +42,36 @@ pub struct Application {
 
 impl Application {
     pub async fn build(config: Settings) -> Result<Self> {
-        let _vips_app = VipsApp::new("imagor_rs", true).wrap_err("Failed to initialize VipsApp")?;
-        _vips_app.concurrency_set(config.processor.concurrency);
-
         let address = format!("{}:{}", config.application.host, config.application.port);
+        println!("Server started at {}\n", &address);
         let listener = TcpListener::bind(address).await.wrap_err(
             "Failed to bind to the port. Make sure you have the correct permissions to bind to the port",
         )?;
         let port = listener.local_addr()?.port();
 
-        let processor = Processor::default();
+        let _vips_app = VipsApp::new("imagor_rs", true).wrap_err("Failed to initialize VipsApp")?;
+        let concurrency = match available_parallelism() {
+            Ok(parallelism) => parallelism.get() as i32,
+            Err(_) => 1,
+        };
+        _vips_app.concurrency_set(concurrency);
+
+        let processor = Processor::new(config.processor);
         let cache = RedisCache::new("redis://redis:6379")?;
         let server = match config.storage.client {
             StorageClient::S3(s3_settings) => {
+                info!("Using S3 storage");
                 let storage = S3Storage::new(
                     config.storage.base_dir,
                     config.storage.path_prefix,
                     config.storage.safe_chars,
+                    s3_settings.endpoint,
                     s3_settings.region,
                     s3_settings.bucket,
                     s3_settings.access_key.expose_secret(),
                     s3_settings.secret_key.expose_secret(),
                 )
-                .await;
+                .await?;
 
                 // Ensure bucket exists
                 storage.ensure_bucket_exists().await?;
@@ -71,6 +79,7 @@ impl Application {
                 run(listener, storage, processor, cache).await?
             }
             StorageClient::GCS(gcs_settings) => {
+                info!("using GCS storage");
                 let storage = GCloudStorage::new(
                     config.storage.base_dir,
                     config.storage.path_prefix,
@@ -82,6 +91,7 @@ impl Application {
                 run(listener, storage, processor, cache).await?
             }
             StorageClient::Filesystem(filesystem_settings) => {
+                info!("using filesystem storage");
                 let storage = FileStorage::new(
                     PathBuf::from(filesystem_settings.base_dir),
                     config.storage.path_prefix,
@@ -98,8 +108,16 @@ impl Application {
             _vips_app,
         })
     }
-
     pub async fn run_until_stopped(self) -> Result<(), std::io::Error> {
+        println!(
+            r#"\n                ____  ____
+ |_ _|_ __ ___   __ _  __ _  ___ |  _ \/ ___|
+  | || '_ ` _ \ / _` |/ _` |/ _ \| |_) \___ \
+  | || | | | | | (_| | (_| | (_) |  _ < ___) |
+ |___|_| |_| |_|\__,_|\__, |\___/|_| \_\____/
+                       |___/
+        "#
+        );
         self.server.await
     }
 }

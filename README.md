@@ -1,24 +1,4 @@
 
-# Imagor-rs (WIP)
-
-imagor but in rust (mostly for self-learning purposes)
-
-# TODO
-
-- [x] set of server (axum, tracing, etc.)
-- [x] route parser
-- [x] add auth+hashing to imagorpath
-- [x] storage backend / load images
-- [x] process images (with vips)
-- [x] serve processed images
-- [x] enforce auth on main route
-- [x] add cache + defined loaders / results storage
-- [ ] add config
-- [x] prom metrics
-- [ ] add tests?
-
----
-
 # imagor
 
 imagor is a fast, secure image processing server and rust library.

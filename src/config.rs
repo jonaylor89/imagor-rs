@@ -1,10 +1,12 @@
 use secrecy::SecretString;
 use serde::Deserialize;
 use serde_aux::prelude::deserialize_number_from_string;
+use tracing::error;
 
 use crate::imagorpath::normalize::SafeCharsType;
 
-#[derive(serde::Deserialize, Clone)]
+#[derive(serde::Deserialize, Clone, Default)]
+#[serde(default)]
 pub struct Settings {
     pub application: ApplicationSettings,
     pub processor: ProcessorSettings,
@@ -13,15 +15,26 @@ pub struct Settings {
 }
 
 #[derive(serde::Deserialize, Clone)]
+#[serde(default)]
 pub struct ApplicationSettings {
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub port: u16,
     pub host: String,
-    pub base_url: String,
     pub hmac_secret: SecretString,
 }
 
-#[derive(serde::Deserialize, Clone)]
+impl Default for ApplicationSettings {
+    fn default() -> Self {
+        Self {
+            port: 8080,                                                      // default port
+            host: String::from("127.0.0.1"),                                 // default host
+            hmac_secret: SecretString::from("this-is-a-secret".to_string()), // empty secret
+        }
+    }
+}
+
+#[derive(serde::Deserialize, Clone, Default)]
+#[serde(default)]
 pub struct ProcessorSettings {
     pub disable_blur: bool,
     pub disabled_filters: Vec<String>,
@@ -40,7 +53,8 @@ pub struct ProcessorSettings {
     pub avif_speed: i32,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Default)]
+#[serde(default)]
 pub struct StorageSettings {
     pub base_dir: String,
     pub path_prefix: String,
@@ -55,12 +69,25 @@ pub enum StorageClient {
     Filesystem(FilesystemSettings),
 }
 
+impl Default for StorageClient {
+    fn default() -> Self {
+        Self::Filesystem(FilesystemSettings::default())
+    }
+}
+
 #[derive(Deserialize, Clone)]
 pub struct S3Settings {
     pub region: String,
     pub bucket: String,
+
+    #[serde(default = "default_s3_endpoint")]
+    pub endpoint: String,
     pub access_key: SecretString,
     pub secret_key: SecretString,
+}
+
+fn default_s3_endpoint() -> String {
+    "https://s3.amazonaws.com".to_string()
 }
 
 #[derive(Deserialize, Clone)]
@@ -69,25 +96,38 @@ pub struct GCSSettings {
     pub credentials: SecretString,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Default)]
+#[serde(default)]
 pub struct FilesystemSettings {
+    #[serde(default = "default_base_dir")]
     pub base_dir: String,
+}
+
+fn default_base_dir() -> String {
+    "uploads".to_string()
 }
 
 #[derive(Deserialize, Clone)]
 pub enum CacheSettings {
-    Redis(RedisSettings),
-    Filesystem(String),
+    Redis { uri: String },
+    Filesystem(FilesystemCache),
 }
 
-#[derive(Deserialize, Clone)]
-pub struct RedisSettings {
-    pub uri: String,
-}
-
-#[derive(Deserialize, Clone)]
-pub struct FilesystemCacheSettings {
+#[derive(Deserialize, Clone, Default)]
+#[serde(default)]
+pub struct FilesystemCache {
+    #[serde(default = "default_cache_base_dir")]
     pub base_dir: String,
+}
+
+fn default_cache_base_dir() -> String {
+    "cache".to_string()
+}
+
+impl Default for CacheSettings {
+    fn default() -> Self {
+        Self::Filesystem(FilesystemCache::default())
+    }
 }
 
 pub enum Environment {
@@ -139,5 +179,8 @@ pub fn get_configuration() -> Result<Settings, config::ConfigError> {
                 .separator("__"),
         );
 
-    builder.build()?.try_deserialize::<Settings>()
+    builder
+        .build()?
+        .try_deserialize::<Settings>()
+        .inspect_err(|e| error!("Failed to load configuration: {}", e))
 }

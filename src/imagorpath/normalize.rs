@@ -9,8 +9,9 @@ trait SafeChars {
     fn should_escape(&self, c: u8) -> bool;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum SafeCharsType {
+    #[default]
     Default,
     Custom(HashSet<u8>),
     Noop,

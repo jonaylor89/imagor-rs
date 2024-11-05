@@ -7,7 +7,6 @@ use crate::{
         color::Color,
         filter::{Filter, ImageType},
         params::{Fit, HAlign, Params, VAlign},
-        type_utils::F32,
     },
     storage::storage::Blob,
 };

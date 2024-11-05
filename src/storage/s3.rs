@@ -7,7 +7,7 @@ use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::Client;
 use axum::async_trait;
 use color_eyre::Result;
-use tracing::info;
+use tracing::{debug, info, warn};
 
 #[derive(Clone)]
 pub struct S3Storage {
@@ -69,50 +69,16 @@ impl ImageStorage for S3Storage {
 }
 
 impl S3Storage {
+    #[tracing::instrument]
     pub async fn new(
         base_dir: String,
         path_prefix: String,
         safe_chars: SafeCharsType,
+        endpoint_url: String,
         bucket: String,
         region: String,
         access_key: &str,
         secret_key: &str,
-    ) -> Self {
-        // Create custom credentials
-        let credentials = Credentials::new(
-            access_key, secret_key, None, // session token
-            None, // expiry
-            "minio",
-        );
-
-        // Create the config
-        let config = aws_sdk_s3::Config::builder()
-            .behavior_version_latest()
-            .region(Region::new(region))
-            .credentials_provider(credentials)
-            .force_path_style(true) // This is important for MinIO
-            .build();
-
-        let client = Client::from_conf(config);
-
-        S3Storage {
-            base_dir,
-            path_prefix,
-            safe_chars,
-            client,
-            bucket,
-        }
-    }
-
-    #[tracing::instrument]
-    pub async fn new_with_minio(
-        base_dir: String,
-        path_prefix: String,
-        safe_chars: SafeCharsType,
-        bucket: String,
-        endpoint: String,
-        access_key: String,
-        secret_key: String,
     ) -> Result<Self> {
         // Create custom credentials
         let credentials = Credentials::new(
@@ -124,8 +90,8 @@ impl S3Storage {
         // Create the config
         let config = aws_sdk_s3::Config::builder()
             .behavior_version_latest()
-            .region(Region::new("us-east-1")) // MinIO defaults to us-east-1
-            .endpoint_url(&endpoint)
+            .region(Region::new(region))
+            .endpoint_url(&endpoint_url)
             .credentials_provider(credentials)
             .force_path_style(true) // This is important for MinIO
             .build();
@@ -133,6 +99,10 @@ impl S3Storage {
         let client = Client::from_conf(config);
 
         // Wait for MinIO to be ready
+        debug!(
+            "Waiting for MinIO to be ready... {} - {}",
+            endpoint_url, bucket
+        );
         wait_for_minio(&client, 5, Duration::from_secs(2)).await?;
 
         Ok(S3Storage {
@@ -144,6 +114,7 @@ impl S3Storage {
         })
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn ensure_bucket_exists(&self) -> Result<()> {
         let exists = self
             .client
@@ -154,6 +125,7 @@ impl S3Storage {
             .is_ok();
 
         if !exists {
+            warn!("Bucket does not exist, creating it...");
             self.client
                 .create_bucket()
                 .bucket(&self.bucket)
@@ -182,7 +154,7 @@ async fn wait_for_minio(client: &Client, max_retries: u32, delay: Duration) -> R
                     return Err(e.into());
                 }
                 info!(
-                    "Waiting for MinIO to be ready... (attempt {}/{})",
+                    "Waiting for Storage to be ready... (attempt {}/{})",
                     i + 1,
                     max_retries
                 );

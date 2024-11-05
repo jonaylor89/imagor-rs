@@ -1,3 +1,20 @@
 application:
-  address: 0.0.0.0
+  host: 0.0.0.0
   port: 8080
+processor:
+  max_filter_ops: 10
+  max_width: 16000
+  max_height: 16000
+storage:
+  base_dir: "base_dir"
+  images_dir: images_dir
+  client:
+    s3:
+      bucket: "imagor-rs"
+      endpoint: "http://minio:9000"
+      region: "us-east-1" # default for MinIO
+      access_key: "minioadmin"
+      secret_key: "minioadmin"
+cache:
+  redis:
+    uri: "redis://localhost:6379"

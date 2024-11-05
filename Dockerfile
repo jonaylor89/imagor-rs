@@ -43,6 +43,7 @@ RUN DEBIAN_FRONTEND=noninteractive \
 
 COPY --from=builder /usr/src/app/target/release/imagor-rs /usr/local/bin/imagor-rs
 COPY samples samples
+COPY config config
 
 ENV RUST_LOG=info
 ENV SSL_CERT_DIR=/etc/ssl/certs
